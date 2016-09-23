@@ -19,11 +19,11 @@ RUN dpkg -i ${BUILDCACHE}/puppetlabs*.deb && \
     apt-get update && \
     apt-get install -y puppet-agent && \
     puppet resource service puppet ensure=stopped enable=false && \
-    gem install puppet-lint librarian-puppet && \
+    gem install puppet-lint librarian-puppet aws-sdk-core retries && \
     puppet module install puppetlabs/aws && \
     apt-get clean all && \
     rm -rf "${BUILDCACHE}/puppetlabs*.deb"
-ADD ./scripts/lib/provision/Puppetfile "${WORKDIR}/"
+ADD ./scripts/lib/provision/Puppetfile /etc/puppetlabs/code/
 
 # for various operations against Rancher API
 ARG RANCHER_CLI_URI=https://github.com/rancher/cli/releases/download/v0.2.0/rancher-linux-amd64-v0.2.0.tar.gz

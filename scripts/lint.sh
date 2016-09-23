@@ -3,4 +3,4 @@
 set -eu
 
 cd /workdir
-invoke syntax
+invoke lint.check

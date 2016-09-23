@@ -38,16 +38,16 @@ def missing_envvars(
 
 
 #
-def provision_aws_network():
+def deprovision_aws_network():
      # something wonky w/ string interpolation in Python means these have to be split.
      cmd = "puppet apply --detailed-exitcodes --verbose -e " \
            "'class { \"::rancher_infra\": default_ssh_key => 'nrvale0', } -> " \
-           "class { \"::rancher_infra::ci::validation_tests\": ensure => present, "
+           "class { \"::rancher_infra::ci::validation_tests\": ensure => absent, "
 
      uuid = "uuid => \"{}\"".format(os.environ.get('AWS_PREFIX'))
 
      cmd = cmd + uuid + ", }\'"
-     log.info(Fore.BLUE + "Provisioning AWS network via: \'{}\'".format(cmd))
+     log.info(Fore.BLUE + "Deprovisioning AWS network via: \'{}\'".format(cmd))
 
      try:
           run(cmd)
@@ -56,7 +56,7 @@ def provision_aws_network():
           if e.result.exited in [0, 2]:
                pass
           else:
-               log.error("Failed to provision AWS network/VPC resources: {} :: {}.".format(e.result.return_code, e.result.stderr))
+               log.error("Failed to deprovision AWS network/VPC resources: {} :: {}.".format(e.result.return_code, e.result.stderr))
                return False
 
      return True
@@ -98,8 +98,8 @@ def main():
      if not puppet_librarian_sync():
           err_and_exit("Unable to sync required Puppet code for AWS provisioning!")
 
-     if not provision_aws_network():
-          err_and_exit("Unable to converge AWS network resources for commit \'{}\!".format(os.environ.get('AWS_PREFIX')))
+     if not deprovision_aws_network():
+          err_and_exit("Unable to deprovision AWS network resources for commit \'{}\!".format(os.environ.get('AWS_PREFIX')))
 
 
 if '__main__' == __name__:

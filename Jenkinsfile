@@ -6,7 +6,7 @@ node {
 
   stage "prep"
   checkout scm
-  sh 'docker build -t rancherlabs/ci-validation-tests -f Dockerfile .'
+  sh 'docker build ${DOCKER_BUILD_OPTIONS} -t rancherlabs/ci-validation-tests -f Dockerfile .'
 
   stage "syntax"
   sh 'docker run --rm -v "$(pwd)":/workdir rancherlabs/ci-validation-tests syntax'
@@ -17,13 +17,15 @@ node {
   stage "provision AWS"
   sh "docker run --rm -v \"\$(pwd)\":/workdir " +
     "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
-    "-e AWS_SECRET_KEY=${AWS_SECRET_KEY} " +
-    "-e GIT_COMMIT=${GIT_COMMIT} " +
-    "-e DEBUG=${DEBUG} " + 
+    "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
+    "-e AWS_PREFIX=${GIT_COMMIT} " +
     "rancherlabs/ci-validation-tests provision aws"
 
-  stage "decommission AWS"
-  sh 'docker run --rm -v "$(pwd)":/workdir rancherlabs/ci-validation-tests decommission aws'
-  
+  stage "deprovision"
+  sh "docker run --rm -v \"\$(pwd)\":/workdir " +
+    "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
+    "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
+    "-e AWS_PREFIX=${GIT_COMMIT} " +
+    "rancherlabs/ci-validation-tests deprovision aws"
 }
 

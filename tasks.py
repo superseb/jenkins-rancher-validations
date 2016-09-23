@@ -9,7 +9,7 @@ import numpy
 PEP8_IGNORE = 'E111,E114,E401,E402,E266,F841'
 init()
 
-EXCLUDE_DIRS = []
+EXCLUDE_DIRS = ['.tmp']
 
 
 def find_files(pattern, excludes=[]):
@@ -58,21 +58,22 @@ def syntax(ctx):
 
     print(Fore.GREEN + "Syntax checking of Python files...")
     python_files = find_files('*.py', excludes=EXCLUDE_DIRS)
-    if python_files:
+    if 0 != len(python_files):
         cmd = "python -m py_compile {}".format(' '.join(python_files))
         result = run(cmd, echo=True)
 
     print(Fore.GREEN + "Syntax checking of Puppet files...")
     puppet_files = find_files('*.pp', excludes=EXCLUDE_DIRS)
-    if puppet_files:
+    if 0 != len(puppet_files):
         cmd = "puppet parser validate {}".format(' '.join(puppet_files))
         result = run(cmd, echo=True)
 
     print(Fore.GREEN + "Syntax checking BASH scripts...")
     bash_scripts = find_files('*.sh', excludes=EXCLUDE_DIRS)
-    for script in bash_scripts:
-      print(Fore.GREEN + "Checking file {}...".format(script))
-      result = run("bash -n {}".format(script), echo=True)
+    if 0 != len(bash_scripts):
+        for script in bash_scripts:
+            print(Fore.GREEN + "Checking file {}...".format(script))
+            result = run("bash -n {}".format(script), echo=True)
 
    # won't get here unless things run clean
     print(Fore.GREEN + "Exit code: {}".format(result.return_code))
@@ -85,7 +86,7 @@ def lint_check(ctx):
     """
     print(Fore.GREEN + "Lint checking of Python files...")
     python_files = find_files('*.py', excludes=EXCLUDE_DIRS)
-    if python_files:
+    if 0 != len(python_files):
         cmd = "flake8 --count --statistics --show-source "\
               " --max-line-length=160 --ignore={} {}".format(
                   PEP8_IGNORE, ' '.join(python_files))
@@ -93,9 +94,10 @@ def lint_check(ctx):
 
     print(Fore.GREEN + "Lint checking of Puppet files...")
     puppet_files = find_files('*.pp', excludes=EXCLUDE_DIRS)
-    if puppet_files:
-        cmd = "puppet-lint {}".join(puppet_files)
-        result = run(cmd, echo=True)
+    if 0 != len(puppet_files):
+        if puppet_files:
+            cmd = "puppet-lint {}".join(puppet_files)
+            result = run(cmd, echo=True)
 
     # won't get here unless things run clean
     print(Fore.GREEN + "Exit code: {}".format(result.return_code))
@@ -109,9 +111,10 @@ def lint_fix(ctx):
     print(Fore.GREEN + "Lint fixing Python files...")
 
     python_files = find_files('*.py', excludes=EXCLUDE_DIRS)
-    cmd = "autopep8 -r --in-place --ignore={} {}".format(
-        PEP8_IGNORE, ' '.join(python_files))
-    result = run(cmd, echo=True)
+    if 0 != len(python_files):
+        cmd = "autopep8 -r --in-place --ignore={} {}".format(
+            PEP8_IGNORE, ' '.join(python_files))
+        result = run(cmd, echo=True)
 
     # won't get here unless things run clean
     print(Fore.GREEN + "Exit code: {}".format(result.return_code))
