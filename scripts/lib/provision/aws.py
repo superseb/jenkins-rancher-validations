@@ -52,9 +52,19 @@ def provision_aws_network():
      try:
           run(cmd)
      except Failure as e:
+
           # Puppet w/ detailed-exitcodes returns 0 on no changes and 2 on all changes successful.
           if e.result.exited in [0, 2]:
                pass
+
+          # puppetlabs/aws doesn't currently handle immutable AWS resources all that well.
+          # https://github.com/puppetlabs/puppetlabs-aws/issues/346
+          # I catch an error message about inability to mutate routes here and treat it
+          # as exitcode 0.
+          if 'routes property is read-only' in e.result.stderr:
+               log.debug("Caught a non-error as error. Returning True...")
+               return True
+
           else:
                log.error("Failed to provision AWS network/VPC resources: {} :: {}.".format(e.result.return_code, e.result.stderr))
                return False

@@ -5,8 +5,15 @@ set -eu
 cd /workdir
 
 if [ "aws" == "$1" ]; then
-    exec env AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} AWS_PREFIX=${AWS_PREFIX} ./scripts/lib/provision/aws.py
+    exec env $(env) ./scripts/lib/provision/aws.py
+    
+elif [ "rancher_server" == "$1" ]; then
+    exec env $(env) ./scripts/lib/provision/rancher_server.py
+    
+elif [ "rancher_agents" == "$1" ]; then
+    exec env $(env) ./scripts/lib/provision/rancher_agents.py
+    
 else
-    echo "Must specify 'aws'."
+    echo 'Must specify <aws|rancher_server|rancher_agents>.'
     exit -1
 fi

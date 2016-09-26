@@ -4,3 +4,5 @@ __pycache*
 \#*
 *.lock
 .tmp
+.env*
+.\#*

@@ -5,3 +5,5 @@ __pycache*
 .git
 *.lock
 .tmp
+.env*
+.\#*

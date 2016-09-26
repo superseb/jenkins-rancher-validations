@@ -1,5 +1,9 @@
 forge "https://forgeapi.puppetlabs.com"
 
+mod 'puppetlabs/aws',
+    :git => "https://github.com/puppetlabs/puppetlabs-aws",
+    :ref => "a2a572d588f15086dfad562e1b8edfec49f37e03"
+    
 mod 'rancherlabs/rancher_infra',
     :git => "https://github.com/nrvale0/puppet-rancher_infra",
     :ref => "master"
