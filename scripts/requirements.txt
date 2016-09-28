@@ -6,3 +6,4 @@ numpy==1.11.1
 PyYAML==3.12
 flake8==3.0.4
 autopep8==1.2.4
+httpie==0.9.6

@@ -53,6 +53,7 @@ def missing_envvars(envvars=['AWS_ACCESS_KEY_ID',
 
 def docker_machine_status(name):
      cmd = DOCKER_MACHINE + "status {}".format(name)
+
      try:
           result = run(cmd, echo=True)
           log.debug("result: {}".format(result))

@@ -12,6 +12,8 @@ def AWS_SUBNET_ID='subnet-0793ad63'
 
 // default these somehow later
 def AWS_INSTANCE_TYPE='m4.large'
+def AWS_AGENT_INSTANCE_TYPE='t2.medium'
+def AWS_AGENT_AMI='ami-746aba14'
 def AWS_DEFAULT_REGION='us-west-2'
 def AWS_ZONE='a'
 
@@ -53,7 +55,6 @@ node {
     "-e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} " +
     "-e AWS_ZONE=${AWS_ZONE} " +
     "-e RANCHER_VERSION=${RANCHER_VERSION} " +
-    "-e DEBUG=true " +
     "rancherlabs/ci-validation-tests provision rancher_server"
 
   stage "provision Rancher Agents"
@@ -61,36 +62,41 @@ node {
     "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
     "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
     "-e AWS_PREFIX=${AWS_PREFIX} " +
-    "-e AWS_AMI=${AWS_AMI} " +
-    "-e AWS_INSTANCE_TYPE=${AWS_INSTANCE_TYPE} " +
+    "-e AWS_AMI=${AWS_AGENT_AMI} " +
     "-e AWS_TAGS=${AWS_TAGS} " +
     "-e AWS_VPC_ID=${AWS_VPC_ID} " +
     "-e AWS_SUBNET_ID=${AWS_SUBNET_ID} " +
     "-e AWS_SECURITY_GROUP=${AWS_SECURITY_GROUP} " +
     "-e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} " +
     "-e AWS_ZONE=${AWS_ZONE} " +
-    "-e DEBUG=true " + 
+    "-e AWS_INSTANCE_TYPE=${AWS_AGENT_INSTANCE_TYPE} " +
     "rancherlabs/ci-validation-tests provision rancher_agents"
 
-  stage "deprovision Rancher Agents"
-  sh "docker run --rm -v \"\$(pwd)\":/workdir " +
-    "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
-    "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
-    "-e AWS_PREFIX=${AWS_PREFIX} " +
+  stage "configure rancher/server for test environment"
+/*  sh "docker run --rm -v \"\$(pwd)\":/workdir " +
+    "-e RANCHER_ADMIN_USER=${RANCHER_ADMIN_USER} " +
+    "-e RANCHER_ADMIN_PASSWORD=${RANCHER_ADMIN_PASSWORD} " +
+    "-e RANCHER_ACCESS_CONTROL=${RANCHER_ACCESS_CONTROL}" +
     "-e DEBUG=true " + 
-    "rancherlabs/ci-validation-tests deprovision rancher_agents"
-
-/*  stage "deprovision rancher/server"
-  sh "docker run --rm -v \"\$(pwd)\":/workdir " +
-    "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
-    "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
-    "-e AWS_PREFIX=${AWS_PREFIX} " +
-    "-e DEBUG=true " +
-    "rancherlabs/ci-validation-tests deprovision rancher_server"
+    "rancherlabs/ci-validation-tests configure rancher_server"
 */
 
-/*  stage "deprovision AWS"
+  stage "run validation tests"
+/*
+
+*/
+  stage "deprovision Rancher Agents"
   sh "docker run --rm -v \"\$(pwd)\":/workdir " +
+    "-e AWS_PREFIX=${AWS_PREFIX} " +
+    "rancherlabs/ci-validation-tests deprovision rancher_agents"
+
+  stage "deprovision rancher/server"
+  sh "docker run --rm -v \"\$(pwd)\":/workdir " +
+    "-e AWS_PREFIX=${AWS_PREFIX} " +
+    "rancherlabs/ci-validation-tests deprovision rancher_server"
+
+  stage "deprovision AWS"
+/*  sh "docker run --rm -v \"\$(pwd)\":/workdir " +
     "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
     "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
     "-e AWS_PREFIX=${GIT_COMMIT} " +

@@ -14,7 +14,7 @@ stream = logging.StreamHandler()
 stream.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s:%(lineno)s - %(funcName)s - %(message)s'))
 log.addHandler(stream)
 
-DOCKER_MACHINE = "docker-machine --storage-path /workdir/.docker/machine "
+DOCKER_MACHINE = 'docker-machine --storage-path /workdir/.docker/machine '
 
 
 #
@@ -29,9 +29,7 @@ def err_and_exit(msg, code=-1):
 
 
 #
-def missing_envvars(envvars=['AWS_ACCESS_KEY_ID',
-                             'AWS_SECRET_ACCESS_KEY',
-                             'AWS_PREFIX']):
+def missing_envvars(envvars=['AWS_PREFIX']):
      missing = []
      for envvar in envvars:
           if envvar not in os.environ:
@@ -40,47 +38,23 @@ def missing_envvars(envvars=['AWS_ACCESS_KEY_ID',
      return missing
 
 
-def docker_machine_status(name):
-     cmd = DOCKER_MACHINE + "status {}".format(name)
-     try:
-          result = run(cmd, echo=True)
-          log.debug("result: {}".format(result))
-          if 'Stopped' in result.stdout:
-               return 'Stopped'
-          if 'Running' in result.stdout:
-               return 'Running'
-
-     except Failure as e:
-          if 'Host does not exist' in e.result.stderr:
-               return 'DNE'
-          else:
-               err_and_exit("Invalid docker-machine machine state. Should never get here!")
-
-
 #
-def deprovision_rancher_server():
+def deprovision_rancher_agents():
 
      machine_name = "{}-ubuntu-1604-validation-tests-server0".format(os.environ.get('AWS_PREFIX'))
-     machine_state = docker_machine_status(machine_name)
 
-     if machine_state in ['Running', 'Stopped']:
-          log.info("\'{}\' detected as \'{}\'. Deprovisioning...".format(machine_name, machine_state))
-          try:
-               cmd = DOCKER_MACHINE + "rm -f {}".format(machine_name)
-               result = run(cmd, echo=True)
-               return True
+     try:
+          server_address = run(DOCKER_MACHINE + " ip {}".format(machine_name), echo=True).stdout.rstrip()
+          os.environ['RANCHER_URL'] = "http://{}:8080/v1/schemas".format(server_address)
 
-          except Failure as e:
-               log.error("Failed to deprovision \'{}\'!: {} :: {}".format(machine_name, e.result.return_code, e.result.stderr))
-               return False
+          cmd = "for i in `rancher host ls -q`; do rancher rm $i; done"
+          run(cmd, echo=True)
 
-     elif 'DNE' is machine_state:
-          log.info("\'{}\' not detected. No need to deprovision.".format(machine_name))
-          return True
-
-     else:
-          log.error("Invalid machine state \'{}\'! Should never get here! Exiting!".format(machine_state))
+     except Failure as e:
+          log.error("Failed while deprovisioning Rancher Agents!: {} :: {}".format(e.result.return_code, e.result.stderr))
           return False
+
+     return True
 
 
 #
@@ -95,8 +69,8 @@ def main():
      if [] != missing:
           err_and_exit("Unable to find required environment variables! : {}".format(', '.join(missing)))
 
-     if not deprovision_rancher_server():
-          err_and_exit("Failed while deprovisioning rancher/server!")
+     if not deprovision_rancher_agents():
+          err_and_exit("Failed while deprovisioning Rancher Agents!")
 
 
 if '__main__' == __name__:

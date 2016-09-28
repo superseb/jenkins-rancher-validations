@@ -20,7 +20,6 @@ RUN dpkg -i ${BUILDCACHE}/puppetlabs*.deb && \
     apt-get install -y puppet-agent && \
     puppet resource service puppet ensure=stopped enable=false && \
     gem install puppet-lint librarian-puppet aws-sdk-core retries && \
-    puppet module install puppetlabs/aws && \
     apt-get clean all && \
     rm -rf "${BUILDCACHE}/puppetlabs*.deb"
 ADD ./scripts/lib/provision/Puppetfile /etc/puppetlabs/code/

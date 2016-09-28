@@ -6,6 +6,7 @@ import sys, logging, os, colorama
 from invoke import run, Failure
 from colorama import Fore
 from pprint import pprint as pp
+from time import time, sleep
 
 colorama.init()
 log = logging.getLogger(__name__)
@@ -50,21 +51,27 @@ def missing_envvars(envvars=['AWS_ACCESS_KEY_ID',
      return missing
 
 
-def docker_machine_status(name):
-     cmd = DOCKER_MACHINE + "status {}".format(name)
-     try:
-          result = run(cmd, echo=True)
-          log.debug("result: {}".format(result))
-          if 'Stopped' in result.stdout:
-               return 'Stopped'
-          if 'Running' in result.stdout:
-               return 'Running'
+#
+def wait_for_rancher_server(url, timeout=600):
+     elapsed_time = 0
+     step_time = 5
 
-     except Failure as e:
-          if 'Host does not exist' in e.result.stderr:
-               return 'DNE'
-          else:
-               err_and_exit("Invalid docker-machine machine state. Should never get here!")
+     log.debug("Polling rancher/server API provider at \'{}\' with timeout of {} seconds...".format(url, timeout))
+     start_time = time()
+     cmd = "curl -sL -w '%{{http_code}}\n' {} -o /dev/null".format(url)
+     while elapsed_time < timeout:
+          try:
+               sleep(step_time)
+               result = run(cmd)
+          except Failure as e:
+               log.debug("Failed to connect to {} after {} seconds: {} :: {}...".format(url, step_time, e.result.return_code, e.result.stderr))
+               elapsed_time = time() - start_time
+               log.info("{} secs ET for rancher/server \'{}\' wait...".format(elapsed_time, url))
+               if elapsed_time >= timeout:
+                    log.debug("Exceeded timeout waiting for rancher/server API provider.")
+                    return False
+          break
+     return True
 
 
 #
@@ -84,36 +91,40 @@ def provision_rancher_agents():
           os.environ['RANCHER_URL'] = rancher_url
           log.info("Environment variable 'RANCHER_URL' set to \'{}\'...".format(rancher_url))
 
-          cmd = 'rancher ps'
-          log.debug("Checking connectivity to rancher/server \'{}\'...".format(server_address))
-          run(cmd, echo=True)
+          log.info("Waiting for rancher/server API provider to be online...")
+          if not wait_for_rancher_server(rancher_url, timeout=1200):
+               log.error("Failed to connect to Rancher API server at \'{}\'".format(rancher_url))
+               return False
 
           # check if the host already has 3 agents
           # FIXME: But are they active and functioning?
           cmd = "rancher hosts ls -q | wc -l"
           log.debug("Checking for 3 existing Rancher Agents...")
           result = run(cmd, echo=True)
-          log.info("Detected {} existing Rancher Agents".format(result.stdout))
-          if '3' == result.stdout:
+          log.info("Detected {} existing Rancher Agents".format(result.stdout.rstrip()))
+          if '3' == result.stdout.rstrip():
                provision_agents = False
 
           if provision_agents:
                # all of the necessary envvars are already present with 'AWS_' prefix :\
                aws_params = {k: v for k, v in os.environ.items() if k.startswith('AWS')}
-               for k, v in aws_params.iteritems():
+               for k, v in aws_params.items():
                     newk = k.replace('AWS_', 'AMAZONEC2_')
                     log.debug("Duplicating envvar \'{}\' as \'{}={}\'...".format(k, newk, v))
-                    os.environ[newk] = v
+                    os.environ[newk] = v.rstrip(os.linesep)
 
-               # except for the name skew for AWS_ACCESS_KEY_ID :\
+               # though some of the envvar naming is inconsistent between docker-machine and rancer cli
                os.environ['AMAZONEC2_ACCESS_KEY'] = os.environ.get('AWS_ACCESS_KEY_ID')
+               os.environ['AMAZONEC2_SECRET_KEY'] = os.environ.get('AWS_SECRET_ACCESS_KEY')
+               os.environ['AMAZONEC2_REGION'] = os.environ.get('AWS_DEFAULT_REGION')
 
                # FIXME: do this in parallel!
                for agent in ['agent0', 'agent1', 'agent2']:
                     agent_name = "{}-ubuntu-1604-validation-tests-{}".format(aws_prefix, agent)
                     log.info("Creating Rancher Agent \'{}\'...".format(agent_name))
+
                     cmd = "rancher host create --driver amazonec2 {}".format(agent_name)
-                    run(cmd, output=True)
+                    run(cmd, echo=True)
 
      except Failure as e:
           log.error("Failed while provisioning Rancher Agents!: {} :: {}".format(e.result.return_code, e.result.stderr))
