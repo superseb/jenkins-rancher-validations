@@ -8,7 +8,7 @@ from colorama import Fore
 from pprint import pprint as pp
 
 colorama.init()
-log = logging.getLogger()
+log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 stream = logging.StreamHandler()
 stream.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s:%(lineno)s - %(funcName)s - %(message)s'))
@@ -72,12 +72,17 @@ def provision_rancher_agents():
      provision_agents = True
 
      try:
+          aws_prefix = os.environ.get('AWS_PREFIX')
+
           # make sure we can talk to the rancher/server
-          cmd = DOCKER_MACHINE + " ip {}-ubuntu-1604-validation-tests-server0".format(os.environ.get('AWS_PREFIX'))
+          cmd = DOCKER_MACHINE + " ip {}-ubuntu-1604-validation-tests-server0".format(aws_prefix)
           result = run(cmd, echo=True)
           server_address = result.stdout.rstrip(os.linesep)
           log.debug("rancher/server address is {}".format(server_address))
-          os.environ['RANCHER_URL'] = "http://{}:8080/v1/schemas".format(server_address)
+
+          rancher_url = "http://{}:8080/v1/schemas".format(server_address)
+          os.environ['RANCHER_URL'] = rancher_url
+          log.info("Environment variable 'RANCHER_URL' set to \'{}\'...".format(rancher_url))
 
           cmd = 'rancher ps'
           log.debug("Checking connectivity to rancher/server \'{}\'...".format(server_address))
@@ -93,7 +98,22 @@ def provision_rancher_agents():
                provision_agents = False
 
           if provision_agents:
-               err_and_exit("Should provision agents here!!!")
+               # all of the necessary envvars are already present with 'AWS_' prefix :\
+               aws_params = {k: v for k, v in os.environ.items() if k.startswith('AWS')}
+               for k, v in aws_params.iteritems():
+                    newk = k.replace('AWS_', 'AMAZONEC2_')
+                    log.debug("Duplicating envvar \'{}\' as \'{}={}\'...".format(k, newk, v))
+                    os.environ[newk] = v
+
+               # except for the name skew for AWS_ACCESS_KEY_ID :\
+               os.environ['AMAZONEC2_ACCESS_KEY'] = os.environ.get('AWS_ACCESS_KEY_ID')
+
+               # FIXME: do this in parallel!
+               for agent in ['agent0', 'agent1', 'agent2']:
+                    agent_name = "{}-ubuntu-1604-validation-tests-{}".format(aws_prefix, agent)
+                    log.info("Creating Rancher Agent \'{}\'...".format(agent_name))
+                    cmd = "rancher host create --driver amazonec2 {}".format(agent_name)
+                    run(cmd, output=True)
 
      except Failure as e:
           log.error("Failed while provisioning Rancher Agents!: {} :: {}".format(e.result.return_code, e.result.stderr))

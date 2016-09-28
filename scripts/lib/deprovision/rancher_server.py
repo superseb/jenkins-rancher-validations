@@ -8,7 +8,7 @@ from colorama import Fore
 from pprint import pprint as pp
 
 colorama.init()
-log = logging.getLogger()
+log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 stream = logging.StreamHandler()
 stream.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s:%(lineno)s - %(funcName)s - %(message)s'))
