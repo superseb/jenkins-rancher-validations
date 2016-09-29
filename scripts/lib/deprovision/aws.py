@@ -42,11 +42,8 @@ def deprovision_aws_network():
      # something wonky w/ string interpolation in Python means these have to be split.
      cmd = "puppet apply --detailed-exitcodes --verbose -e " \
            "'class { \"::rancher_infra\": default_ssh_key => 'nrvale0', } -> " \
-           "class { \"::rancher_infra::ci::validation_tests\": ensure => absent, "
+           "class { \"::rancher_infra::ci::validation_tests\": ensure => absent, }'"
 
-     uuid = "uuid => \"{}\"".format(os.environ.get('AWS_PREFIX'))
-
-     cmd = cmd + uuid + ", }\'"
      log.info(Fore.BLUE + "Deprovisioning AWS network via: \'{}\'".format(cmd))
 
      try:

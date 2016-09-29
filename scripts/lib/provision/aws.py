@@ -41,12 +41,10 @@ def missing_envvars(
 def provision_aws_network():
      # something wonky w/ string interpolation in Python means these have to be split.
      cmd = "puppet apply --detailed-exitcodes --verbose -e " \
-           "'class { \"::rancher_infra\": default_ssh_key => 'nrvale0', } -> " \
-           "class { \"::rancher_infra::ci::validation_tests\": ensure => present, "
+           "\'include ::rancher_infra ; " \
+           "include ::rancher_infra::ci::validation_tests ; " \
+           "include ::rancher_infra::ci::validation_tests::network \'"
 
-     uuid = "uuid => \"{}\"".format(os.environ.get('AWS_PREFIX'))
-
-     cmd = cmd + uuid + ", }\'"
      log.info(Fore.BLUE + "Provisioning AWS network via: \'{}\'".format(cmd))
 
      try:
@@ -100,7 +98,7 @@ def main():
           err_and_exit("Unable to sync required Puppet code for AWS provisioning!")
 
      if not provision_aws_network():
-          err_and_exit("Unable to converge AWS network resources for commit \'{}\!".format(os.environ.get('AWS_PREFIX')))
+          err_and_exit("Unable to converge AWS network resources for commit \'{}\'!".format(os.environ.get('AWS_PREFIX')))
 
 
 if '__main__' == __name__:

@@ -58,19 +58,21 @@ def wait_for_rancher_server(url, timeout=600):
 
      log.debug("Polling rancher/server API provider at \'{}\' with timeout of {} seconds...".format(url, timeout))
      start_time = time()
-     cmd = "curl -sL -w '%{{http_code}}\n' {} -o /dev/null".format(url)
+     cmd = "curl -sL -w '%{{http_code}}\n' {}/amazonec2Config -o /dev/null".format(url)
      while elapsed_time < timeout:
           try:
-               sleep(step_time)
-               result = run(cmd)
+               if '200' == run(cmd, echo=True).stdout.rstrip():
+                    break
           except Failure as e:
                log.debug("Failed to connect to {} after {} seconds: {} :: {}...".format(url, step_time, e.result.return_code, e.result.stderr))
-               elapsed_time = time() - start_time
-               log.info("{} secs ET for rancher/server \'{}\' wait...".format(elapsed_time, url))
-               if elapsed_time >= timeout:
-                    log.debug("Exceeded timeout waiting for rancher/server API provider.")
-                    return False
-          break
+
+          elapsed_time = time() - start_time
+          log.info("{} secs ET for rancher/server \'{}\' wait...".format(elapsed_time, url))
+          if elapsed_time >= timeout:
+               log.debug("Exceeded timeout waiting for rancher/server API provider.")
+               return False
+          sleep(step_time)
+
      return True
 
 
@@ -118,12 +120,13 @@ def provision_rancher_agents():
                os.environ['AMAZONEC2_SECRET_KEY'] = os.environ.get('AWS_SECRET_ACCESS_KEY')
                os.environ['AMAZONEC2_REGION'] = os.environ.get('AWS_DEFAULT_REGION')
 
+               log.debug("Environment before provisioning agents:\n{}".format(os.environ.copy()))
+
                # FIXME: do this in parallel!
                for agent in ['agent0', 'agent1', 'agent2']:
                     agent_name = "{}-ubuntu-1604-validation-tests-{}".format(aws_prefix, agent)
                     log.info("Creating Rancher Agent \'{}\'...".format(agent_name))
-
-                    cmd = "rancher host create --driver amazonec2 {}".format(agent_name)
+                    cmd = "rancher --wait host create --driver amazonec2 {}".format(agent_name)
                     run(cmd, echo=True)
 
      except Failure as e:

@@ -5,10 +5,10 @@
 def AWS_PREFIX='nathan-testing'
 def AWS_AMI='ami-20be7540'
 def AWS_TAGS='is_ci,true,ci,nathan-testing,owner,nrvale0'
-def AWS_SECURITY_GROUP='nathan-testing-ci-validation-tests-sg'
+def AWS_SECURITY_GROUP='ci-validation-tests-sg'
 
-def AWS_VPC_ID='vpc-65d7c101'
-def AWS_SUBNET_ID='subnet-0793ad63'
+def AWS_VPC_ID="vpc-08d7c46c"
+def AWS_SUBNET_ID="subnet-e9fcc78d"
 
 // default these somehow later
 def AWS_INSTANCE_TYPE='m4.large'
@@ -70,6 +70,7 @@ node {
     "-e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} " +
     "-e AWS_ZONE=${AWS_ZONE} " +
     "-e AWS_INSTANCE_TYPE=${AWS_AGENT_INSTANCE_TYPE} " +
+    "-e DEBUG=true " +
     "rancherlabs/ci-validation-tests provision rancher_agents"
 
   stage "configure rancher/server for test environment"
@@ -82,21 +83,20 @@ node {
 */
 
   stage "run validation tests"
-/*
 
-*/
   stage "deprovision Rancher Agents"
-  sh "docker run --rm -v \"\$(pwd)\":/workdir " +
+/*  sh "docker run --rm -v \"\$(pwd)\":/workdir " +
     "-e AWS_PREFIX=${AWS_PREFIX} " +
     "rancherlabs/ci-validation-tests deprovision rancher_agents"
+/*
 
   stage "deprovision rancher/server"
-  sh "docker run --rm -v \"\$(pwd)\":/workdir " +
-    "-e AWS_PREFIX=${AWS_PREFIX} " +
-    "rancherlabs/ci-validation-tests deprovision rancher_server"
-
-  stage "deprovision AWS"
 /*  sh "docker run --rm -v \"\$(pwd)\":/workdir " +
+    "-e AWS_PREFIX=${AWS_PREFIX} " +
+*/  "rancherlabs/ci-validation-tests deprovision rancher_server"
+
+/*  stage "deprovision AWS"
+    sh "docker run --rm -v \"\$(pwd)\":/workdir " +
     "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
     "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
     "-e AWS_PREFIX=${GIT_COMMIT} " +

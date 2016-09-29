@@ -47,7 +47,7 @@ def deprovision_rancher_agents():
           server_address = run(DOCKER_MACHINE + " ip {}".format(machine_name), echo=True).stdout.rstrip()
           os.environ['RANCHER_URL'] = "http://{}:8080/v1/schemas".format(server_address)
 
-          cmd = "for i in `rancher host ls -q`; do rancher rm $i; done"
+          cmd = "for i in `rancher host ls -q`; do rancher --wait rm -s $i; done"
           run(cmd, echo=True)
 
      except Failure as e:
