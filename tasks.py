@@ -9,7 +9,7 @@ import numpy
 PEP8_IGNORE = 'E111,E114,E401,E402,E266,F841'
 init()
 
-EXCLUDE_DIRS = ['.tmp']
+EXCLUDE_DIRS = ['.tmp', './validation-tests']
 
 
 def find_files(pattern, excludes=[]):

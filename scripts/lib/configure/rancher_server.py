@@ -3,19 +3,22 @@
 # mode: python
 
 import sys, logging, os, colorama
+import requests
+from requests import ConnectionError, HTTPError
 from invoke import run, Failure
 from colorama import Fore
 from pprint import pprint as pp
+from time import time, sleep
+
 
 colorama.init()
-log = logging.getLogger()
+log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 stream = logging.StreamHandler()
 stream.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s:%(lineno)s - %(funcName)s - %(message)s'))
 log.addHandler(stream)
 
-
-DOCKER_MACHINE = 'docker-machine --storage-path /workdir/.docker/machine '
+DOCKER_MACHINE = "docker-machine --storage-path /workdir/.docker/machine "
 
 
 #
@@ -30,17 +33,7 @@ def err_and_exit(msg, code=-1):
 
 
 #
-def missing_envvars(envvars=['AWS_ACCESS_KEY_ID',
-                             'AWS_SECRET_ACCESS_KEY',
-                             'AWS_DEFAULT_REGION',
-                             'AWS_INSTANCE_TYPE',
-                             'AWS_PREFIX',
-                             'AWS_AMI',
-                             'AWS_TAGS',
-                             'AWS_VPC_ID',
-                             'AWS_SUBNET_ID',
-                             'AWS_SECURITY_GROUP',
-                             'AWS_ZONE']):
+def missing_envvars(envvars=['AWS_PREFIX', 'RANCHER_SERVER_OPERATINGSYSTEM']):
 
      missing = []
      for envvar in envvars:
@@ -50,70 +43,104 @@ def missing_envvars(envvars=['AWS_ACCESS_KEY_ID',
      return missing
 
 
-def docker_machine_status(name):
-     cmd = DOCKER_MACHINE + "status {}".format(name)
+#
+def rancher_server_ip(server_name):
+     cmd = DOCKER_MACHINE + " ip {}".format(server_name)
      try:
           result = run(cmd, echo=True)
-          log.debug("result: {}".format(result))
-          if 'Stopped' in result.stdout:
-               return 'Stopped'
-          if 'Running' in result.stdout:
-               return 'Running'
-
      except Failure as e:
-          if 'Host does not exist' in e.result.stderr:
-               return 'DNE'
-          else:
-               err_and_exit("Invalid docker-machine machine state. Should never get here!")
+          log.error("Failed to query the rancher/server address from docker-machine! : {} :: {}".format(e.result.return_code, e.result.stderr))
+          return False
+
+     return result.stdout.rstrip()
 
 
 #
-def provision_rancher_server():
+def rancher_server_config_regtoken(server_name):
+     url = "http://{}:8080/v2-beta/projects/1a5/registrationtokens".format(server_name)
 
-     machine_name = "{}-ubuntu-1604-validation-tests-server0".format(os.environ.get('AWS_PREFIX'))
-     machine_state = docker_machine_status(machine_name)
+     start_time = time()
+     timeout = 300
+     step_time = 5
 
-     if 'Running' is machine_state:
-          log.info("{} detected as running. No action necessary.".format(machine_name))
-          return True
-
-     elif 'Stopped' is machine_state:
-          log.info("{} detected as stopped. Starting...".format(machine_name))
+     while True:
           try:
-               run(DOCKER_MACHINE + "/workdir start {}".format(machine_name), echo=True)
+               resp = requests.post(url, timeout=5)
+          except ConnectionError as e:
+               log.debug("Failed to connect to \'{}\'! : {}".format(url, e))
+               elapsed_time = time() - start_time
+               if elapsed_time >= timeout:
+                    log.error("Timeout exceeded trying to connect to \'{}\!".format(url))
+                    return False
+               else:
+                    sleep(step_time)
+          break
 
-          except Failure as e:
-               log.error("Failed to start machine \'{}\'!".format(machine_name))
-               log.error("retcode: {} :: message: {}".format(e.result.return_code, e.result.stderr))
-               return False
+     log.info('Successfully created reg token on rancher/server.')
+     return True
 
-          return True
 
-     elif 'DNE' is machine_state:
-          # most of the inputs to this command come from AWS_* envvars. However, the ones listed here are
-          # explicit due to bugs in AWS driver when passing some envvars. :\
-          cmd = "{}".format(DOCKER_MACHINE) + \
-                "create " + \
-                "--driver amazonec2 " + \
-                "--amazonec2-security-group {} ".format(os.environ.get('AWS_SECURITY_GROUP')) + \
-                "{}-ubuntu-1604-validation-tests-server0".format(os.environ.get('AWS_PREFIX'))
+#
+def rancher_server_config_regURL(server):
 
+     log.info("Configuring rancher/server registration URL...")
+
+     max_attempts = 10
+     attempts = 0
+     step_time = 5
+     post_data = {}
+
+     while attempts <= max_attempts:
           try:
-               run(cmd, echo=True)
-          except Failure as e:
-               log_err("Failed to provision rancher/server: {} :: {}".format(e.result.return_code, e.result.stderr))
-               return False
+               attempts += 1
 
-          return True
+               # set the reg command url
+               url = "http://{}:8080//v2-beta/settings/api.host".format(server)
+               put_data = {"type": "activeSetting",
+                           "name": "api.host",
+                           "activeValue": '',
+                           "inDb": False,
+                           "source": "",
+                           "value": "http://{}:8080".format(server)}
+               log.debug("PUT: {} :: {}".format(url, put_data))
+               resp = requests.put(url, put_data, timeout=5)
+               break
 
-     else:
-          log.error("Invalid machine state \'{}\'! Should never get here! Exiting!".format(machine_state))
+          except (HTTPError, ConnectionError) as e:
+               log.debug("PUT failed: {} :: {} :: {}".format(url, put_data, e))
+               if attempts >= max_attempts:
+                    log.debug("Exceeded max attempts!".fomat(url))
+                    return False
+               sleep(step_time)
+
+     log.info("Successfully set the registration URL to \'http://{}:8080\'".format(server))
+     return True
+
+
+#
+def configure_rancher_server():
+
+     server_name = "{}-{}-validation-tests-server0".format(os.environ.get('AWS_PREFIX'), os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM'))
+
+     server_address = rancher_server_ip(server_name)
+     if server_address is False:
+          log.error("Failed getting IP for \'{}\'!".format(server_name))
           return False
+
+     if rancher_server_config_regtoken(server_address) is False:
+          log.error("Failed to enable reg token on \'{}\'!".format(server_name))
+          return False
+
+     if rancher_server_config_regURL(server_address) is False:
+          log.error("Failed to set the agent reg URl on \'{}\'!".format(server_name))
+          return False
+
+     return True
 
 
 #
 def main():
-     if 'DEBUG' in os.environ:
+     if os.environ.get('DEBUG'):
           log.setLevel(logging.DEBUG)
           log.debug("Environment:")
           log.debug(pp(os.environ.copy(), indent=2, width=1))
@@ -123,8 +150,8 @@ def main():
      if [] != missing:
           err_and_exit("Unable to find required environment variables! : {}".format(', '.join(missing)))
 
-     if not provision_rancher_server():
-          err_and_exit("Failed while provisioning rancher/server!")
+     if not configure_rancher_server():
+          err_and_exit("Failed while configuring rancher/server!")
 
 
 if '__main__' == __name__:

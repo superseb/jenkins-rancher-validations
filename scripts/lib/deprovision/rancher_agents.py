@@ -29,7 +29,7 @@ def err_and_exit(msg, code=-1):
 
 
 #
-def missing_envvars(envvars=['AWS_PREFIX']):
+def missing_envvars(envvars=['AWS_PREFIX', 'RANCHER_AGENT_OPERATINGSYSTEM']):
      missing = []
      for envvar in envvars:
           if envvar not in os.environ:
@@ -41,7 +41,7 @@ def missing_envvars(envvars=['AWS_PREFIX']):
 #
 def deprovision_rancher_agents():
 
-     machine_name = "{}-ubuntu-1604-validation-tests-server0".format(os.environ.get('AWS_PREFIX'))
+     machine_name = "{}-{}-validation-tests-server0".format(os.environ.get('AWS_PREFIX'), os.environ.get('RANCHER_AGENT_OPERATINGSYSTEM'))
 
      try:
           server_address = run(DOCKER_MACHINE + " ip {}".format(machine_name), echo=True).stdout.rstrip()
@@ -59,7 +59,7 @@ def deprovision_rancher_agents():
 
 #
 def main():
-     if 'DEBUG' in os.environ:
+     if os.environ.get('DEBUG'):
           log.setLevel(logging.DEBUG)
           log.debug("Environment:")
           log.debug(pp(os.environ.copy(), indent=2, width=1))

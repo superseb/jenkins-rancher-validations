@@ -28,7 +28,7 @@ def err_and_exit(msg, code=-1):
 
 #
 def missing_envvars(
-        envvars=['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_PREFIX']):
+        envvars=['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']):
      missing = []
      for envvar in envvars:
           if envvar not in os.environ:
@@ -71,7 +71,7 @@ def puppet_librarian_sync():
           log.info("Copying Puppetfile to /tmp for sync... : \'{}\'".format(cmd))
           run(cmd)
 
-          cmd = 'rm -rf Puppetfile.lock .tmp ; librarian-puppet install --clean --verbose --path /etc/puppetlabs/code/modules'
+          cmd = 'rm -rf Puppetfile.lock .tmp ; librarian-puppet install --clean --path /etc/puppetlabs/code/modules'
           log.info("Installing required Puppet modules: \'{}\'".format(cmd))
           run(cmd)
 
@@ -84,7 +84,7 @@ def puppet_librarian_sync():
 
 #
 def main():
-     if 'DEBUG' in os.environ:
+     if os.environ.get('DEBUG'):
           log.setLevel(logging.DEBUG)
           log.debug("Environment:")
           log.debug(pp(os.environ.copy(), indent=2, width=1))

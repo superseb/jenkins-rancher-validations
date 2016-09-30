@@ -82,7 +82,7 @@ def puppet_librarian_sync():
 
 #
 def main():
-     if 'DEBUG' in os.environ:
+     if os.environ.get('DEBUG'):
           log.setLevel(logging.DEBUG)
           log.debug("Environment:")
           log.debug(pp(os.environ.copy(), indent=2, width=1))

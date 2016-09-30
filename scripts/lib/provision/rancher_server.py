@@ -6,6 +6,7 @@ import sys, logging, os, colorama
 from invoke import run, Failure
 from colorama import Fore
 from pprint import pprint as pp
+from time import sleep
 
 colorama.init()
 log = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ def missing_envvars(envvars=['AWS_ACCESS_KEY_ID',
                              'AWS_SUBNET_ID',
                              'AWS_SECURITY_GROUP',
                              'AWS_ZONE',
+                             'RANCHER_SERVER_OPERATINGSYSTEM',
                              'RANCHER_VERSION']):
 
      missing = []
@@ -72,7 +74,10 @@ def docker_machine_status(name):
 #
 def provision_rancher_server():
 
-     machine_name = "{}-ubuntu-1604-validation-tests-server0".format(os.environ.get('AWS_PREFIX'))
+     aws_prefix = os.environ.get('AWS_PREFIX')
+     aws_security_group = os.environ.get('AWS_SECURITY_GROUP')
+     rancher_server_os = os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM')
+     machine_name = "{}-{}-validation-tests-server0".format(aws_prefix, rancher_server_os)
      machine_state = docker_machine_status(machine_name)
 
      ## provision the thing
@@ -95,8 +100,8 @@ def provision_rancher_server():
           cmd = "{}".format(DOCKER_MACHINE) + \
                 "create " + \
                 "--driver amazonec2 " + \
-                "--amazonec2-security-group {} ".format(os.environ.get('AWS_SECURITY_GROUP')) + \
-                "{}-ubuntu-1604-validation-tests-server0".format(os.environ.get('AWS_PREFIX'))
+                "--amazonec2-security-group {} ".format(aws_security_group) + \
+                "{}-{}-validation-tests-server0".format(aws_prefix, rancher_server_os)
 
           try:
                run(cmd, echo=True)
@@ -122,12 +127,19 @@ def provision_rancher_server():
                log.error("Failed to start rancher/server container!: {} :: {}".format(e.result.return_code, e.result.stderr))
                return False
 
-     return True
+     cmd = DOCKER_MACHINE + " ip {}".format(machine_name)
+     try:
+          result = run(cmd, echo=True)
+     except Failure as e:
+          log.error("Failed to get rancher/server's IP address!")
+          return False
+
+     return result.stdout.rstrip()
 
 
 #
 def main():
-     if 'DEBUG' in os.environ:
+     if os.environ.get('DEBUG'):
           log.setLevel(logging.DEBUG)
           log.debug("Environment:")
           log.debug(pp(os.environ.copy(), indent=2, width=1))
@@ -137,8 +149,14 @@ def main():
      if [] != missing:
           err_and_exit("Unable to find required environment variables! : {}".format(', '.join(missing)))
 
-     if not provision_rancher_server():
+     server_address = provision_rancher_server()
+     if server_address is False:
           err_and_exit("Failed while provisioning rancher/server!")
+
+     log.info("Sleeping for 60 seconds to give rancher/server some time to settle...")
+     sleep(60)
+
+     open('./cattle_test_url.sh', 'w').write("export CATTLE_TEST_URL=\'http://{}:8080/\'".format(server_address))
 
 
 if '__main__' == __name__:

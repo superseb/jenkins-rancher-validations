@@ -25,7 +25,7 @@ RUN dpkg -i ${BUILDCACHE}/puppetlabs*.deb && \
 ADD ./scripts/lib/provision/Puppetfile /etc/puppetlabs/code/
 
 # for various operations against Rancher API
-ARG RANCHER_CLI_URI=https://github.com/rancher/cli/releases/download/v0.1.0-rc3/rancher-linux-amd64-v0.1.0-rc3.tar.gz
+ARG RANCHER_CLI_URI=https://github.com/rancher/cli/releases/download/v0.2.0-rc1/rancher-linux-amd64-v0.2.0-rc1.tar.gz
 ADD "${RANCHER_CLI_URI} ${BUILDCACHE}/"
 RUN (cd "${BUILDCACHE}" && \
       tar zxvf rancher-* && \
@@ -34,7 +34,7 @@ RUN (cd "${BUILDCACHE}" && \
       rm -rf "${BUILDCACHE}/rancher*"
 
 # for provisioning of AWS EC2 instances
-ARG DOCKER_MACHINE_URI=https://github.com/docker/machine/releases/download/v0.8.1/docker-machine-Linux-x86_64
+ARG DOCKER_MACHINE_URI=https://github.com/docker/machine/releases/download/v0.8.2/docker-machine-Linux-x86_64
 ADD "${DOCKER_MACHINE_URI} ${BINDIR}/docker-machine"
 RUN chmod +x "${BINDIR}/docker-machine"
 
