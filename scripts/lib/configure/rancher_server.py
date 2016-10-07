@@ -109,7 +109,7 @@ def rancher_server_config_regURL(server):
           except (HTTPError, ConnectionError) as e:
                log.debug("PUT failed: {} :: {} :: {}".format(url, put_data, e))
                if attempts >= max_attempts:
-                    log.debug("Exceeded max attempts!".fomat(url))
+                    log.debug("Exceeded max attempts!".format(url))
                     return False
                sleep(step_time)
 
