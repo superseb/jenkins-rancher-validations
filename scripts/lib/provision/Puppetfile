@@ -10,4 +10,4 @@ mod 'puppetlabs/aws',
     
 mod 'rancherlabs/rancher_infra',
     :git => "https://github.com/nrvale0/puppet-rancher_infra",
-    :ref => "master"
+    :ref => "os-matrix-phase3"
