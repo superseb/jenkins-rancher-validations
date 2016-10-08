@@ -97,20 +97,20 @@ node {
       sh 'docker build ${DOCKER_BUILD_OPTIONS} -t rancherlabs/ci-validation-tests -f Dockerfile .'
 
       stage "syntax"
-      sh 'docker run --rm -v "$(pwd)":/workdir rancherlabs/ci-validation-tests syntax'
+      sh 'set +x ; docker run --rm -v "$(pwd)":/workdir rancherlabs/ci-validation-tests syntax'
 
       stage "lint"
-      sh 'docker run --rm -v "$(pwd)":/workdir rancherlabs/ci-validation-tests lint'
+      sh 'set +x ; docker run --rm -v "$(pwd)":/workdir rancherlabs/ci-validation-tests lint'
 
       stage "provision AWS"
-      sh "docker run --rm -v \"\$(pwd)\":/workdir " +
+      sh "set +x ; docker run --rm -v \"\$(pwd)\":/workdir " +
 	"-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
 	"-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
 	"-e DEBUG=\'${DEBUG}\' " +
 	"rancherlabs/ci-validation-tests provision aws"
 
       stage "provision rancher/server"
-      sh "docker run --rm -v \"\$(pwd)\":/workdir " +
+      sh "set +x ; docker run --rm -v \"\$(pwd)\":/workdir " +
 	"-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
 	"-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
 	"-e AWS_PREFIX=${AWS_PREFIX} " +
@@ -128,7 +128,7 @@ node {
 	"rancherlabs/ci-validation-tests provision rancher_server"
 
       stage "configure rancher/server for test environment"
-      sh "docker run --rm -v \"\$(pwd)\":/workdir " +
+      sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
 	"-e AWS_PREFIX=${AWS_PREFIX} " +
 	"-e RANCHER_SERVER_OPERATINGSYSTEM=${RANCHER_SERVER_OPERATINGSYSTEM} " +
 	"-e DEBUG=\'${DEBUG}\' " +
@@ -136,7 +136,7 @@ node {
 
       stage "provision Rancher Agents"
       /*    input message: "Proceed with provisioning Rancher Agents?" */
-      sh "docker run --rm -v \"\$(pwd)\":/workdir " +
+      sh "set +x; set +x ; docker run --rm -v \"\$(pwd)\":/workdir " +
 	"-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
 	"-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
 	"-e AWS_PREFIX=${AWS_PREFIX} " +
@@ -167,14 +167,14 @@ node {
 
       if ( 'UNSTABLE' != currentBuild.result ) {
 	stage "deprovision Rancher Agents"
-	sh "docker run --rm -v \"\$(pwd)\":/workdir " +
+	sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
 	  "-e AWS_PREFIX=${AWS_PREFIX} " +
 	  "-e RANCHER_AGENT_OPERATINGSYSTEM=${RANCHER_AGENT_OPERATINGSYSTEM} " +
 	  "-e DEBUG=\'${DEBUG}\' " +
 	  "rancherlabs/ci-validation-tests deprovision rancher_agents"
 
 	stage "deprovision rancher/server"
-	sh "docker run --rm -v \"\$(pwd)\":/workdir " +
+	sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
 	  "-e AWS_PREFIX=${AWS_PREFIX} " +
 	  "-e RANCHER_SERVER_OPERATINGSYSTEM=${RANCHER_SERVER_OPERATINGSYSTEM} " +
 	  "-e DEBUG=\'${DEBUG}\' " +
@@ -182,7 +182,7 @@ node {
 
 	  /* I'm not aware of any cost associated with leaving VPC in place and it saves time to re-use with multiple runs. */
 	  /*  stage "deprovision AWS"
-	      sh "docker run --rm -v \"\$(pwd)\":/workdir " +
+	      sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
 	      "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
 	      "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
 	      "-e AWS_PREFIX=${GIT_COMMIT} " +

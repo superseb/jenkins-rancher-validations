@@ -71,7 +71,7 @@ def puppet_librarian_sync():
           log.info("Copying Puppetfile to /tmp for sync... : \'{}\'".format(cmd))
           run(cmd)
 
-          cmd = 'rm -rf Puppetfile.lock .tmp ; librarian-puppet install --clean --path /etc/puppetlabs/code/modules'
+          cmd = 'rm -rf Puppetfile.lock .tmp ; librarian-puppet install --no-verbose --clean --path /etc/puppetlabs/code/modules'
           log.info("Installing required Puppet modules: \'{}\'".format(cmd))
           run(cmd)
 
