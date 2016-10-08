@@ -157,7 +157,7 @@ node {
       sh './scripts/get_validation-tests.sh'
 
       try {
-	sh '. ./cattle_test_url.sh && py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/core/test_host_api.py'
+	sh '. ./cattle_test_url.sh && py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest'
       } catch(err) {
 	echo 'Test run had failures. Collecting results...'
 	echo 'Will not deprovision infrastructure to allow for post-mortem....'
