@@ -117,7 +117,7 @@ def provision_rancher_server():
                 "create " + \
                 "--driver amazonec2 " + \
                 "--amazonec2-security-group {} ".format(aws_security_group) + \
-                "--amazonec2-ssh-user {}".format(ssh_username) + \
+                "--amazonec2-ssh-user {} ".format(ssh_username) + \
                 "{}-{}-validation-tests-server0".format(aws_prefix, rancher_server_os)
 
           try:

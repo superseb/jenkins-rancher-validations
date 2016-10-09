@@ -79,7 +79,7 @@ def deprovision_rancher_agents():
                log.debug("Did not find a node for hosting rancher/server at \'{}\'...assuming that is ok.".format(machine_name))
           else:
                log.error("Failed while deprovisioning Rancher Agents!: {} :: {}".format(e.result.return_code, e.result.stderr))
-               return False
+               log.error("Not going to let that stop us! 'Damn the torpedos!'")
 
      return True
 
