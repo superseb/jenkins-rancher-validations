@@ -109,6 +109,20 @@ node {
 	"-e DEBUG=\'${DEBUG}\' " +
 	"rancherlabs/ci-validation-tests provision aws"
 
+      stage "deprovision pre-existing Rancher Agents"
+	sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
+	  "-e AWS_PREFIX=${AWS_PREFIX} " +
+	  "-e RANCHER_AGENT_OPERATINGSYSTEM=${RANCHER_AGENT_OPERATINGSYSTEM} " +
+	  "-e DEBUG=\'${DEBUG}\' " +
+	  "rancherlabs/ci-validation-tests deprovision rancher_agents"
+      
+      stage "deprovision pre-existing rancher/server"
+	sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
+	  "-e AWS_PREFIX=${AWS_PREFIX} " +
+	  "-e RANCHER_SERVER_OPERATINGSYSTEM=${RANCHER_SERVER_OPERATINGSYSTEM} " +
+	  "-e DEBUG=\'${DEBUG}\' " +
+	  "rancherlabs/ci-validation-tests deprovision rancher_server"
+	
       stage "provision rancher/server"
       sh "set +x ; docker run --rm -v \"\$(pwd)\":/workdir " +
 	"-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
@@ -157,7 +171,7 @@ node {
       sh './scripts/get_validation-tests.sh'
 
       try {
-	sh '. ./cattle_test_url.sh && py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest'
+	sh '. ./cattle_test_url.sh && py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/core/test_container.py'
       } catch(err) {
 	echo 'Test run had failures. Collecting results...'
 	echo 'Will not deprovision infrastructure to allow for post-mortem....'
