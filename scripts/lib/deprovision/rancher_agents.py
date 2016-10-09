@@ -18,6 +18,25 @@ DOCKER_MACHINE = 'docker-machine --storage-path /workdir/.docker/machine '
 
 
 #
+def docker_machine_status(name):
+     cmd = DOCKER_MACHINE + "status {}".format(name)
+
+     try:
+          result = run(cmd, echo=True)
+          log.debug("result: {}".format(result))
+          if 'Stopped' in result.stdout:
+               return 'Stopped'
+          if 'Running' in result.stdout:
+               return 'Running'
+
+     except Failure as e:
+          if 'Host does not exist' in e.result.stderr:
+               return 'DNE'
+          else:
+               err_and_exit("Invalid docker-machine machine state. Should never get here!")
+
+
+#
 def log_err(msg):
      log.error(Fore.RED + str(msg) + Fore.RESET)
 
@@ -47,8 +66,13 @@ def deprovision_rancher_agents():
           server_address = run(DOCKER_MACHINE + " ip {}".format(machine_name), echo=True).stdout.rstrip()
           os.environ['RANCHER_URL'] = "http://{}:8080/v1/schemas".format(server_address)
 
-          cmd = "for i in `rancher host ls -q`; do rancher --wait rm -s $i; done"
-          run(cmd, echo=True)
+          if 'stopped' == docker_machine_status(machine_name):
+               log.info("rancher/server host node \'{}\' detected as present but 'stopped'. Skipping Agent deprovisioning. "
+                        "This may require manual cleanup.".format(machine_name))
+
+          else:
+               cmd = "for i in `rancher host ls -q`; do rancher --wait rm -s $i; done"
+               run(cmd, echo=True)
 
      except Failure as e:
           if 'RANCHER_SERVER_MISSING_OK' in os.environ and 'Host does not exist' in e.result.stderr:
