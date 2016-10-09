@@ -13,6 +13,19 @@ def rancher_version() {
 }
 
 
+def special_prefix() {
+  try { if ('' != PREFIX) { return PREFIX } }
+  catch (MissingPropertyException e) { return '' }
+}
+
+
+def aws_prefix() {
+  new_prefix = rancher_version()
+  new_prefix = special_prefix() + "-${new_prefix}"
+  "${new_prefix}"
+}
+
+
 // get the result of the previous Job run
 def lastBuildResult() {
   def previous_build = currentBuild.getPreviousBuild()
@@ -68,13 +81,8 @@ node {
   def AWS_AGENT_INSTANCE_TYPE='t2.medium'
   def AWS_DEFAULT_REGION='us-west-2'
   def AWS_ZONE='a'
-  def AWS_PREFIX=''
+  def AWS_PREFIX=aws_prefix()
 
-  if ('master' == "${RANCHER_VERSION}") {
-    AWS_PREFIX="master-${RANCHER_VERSION}"
-  } else {
-    AWS_PREFIX="on-tag-${RANCHER_VERSION}"
-  }
 
   sh "date --iso-8601=ns > created_on"
   created_on = readFile('created_on').trim()
