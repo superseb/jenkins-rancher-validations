@@ -85,9 +85,9 @@ try {
       def AWS_PREFIX=aws_prefix()
 
 
-      sh "date --iso-8601=ns > created_on"
+      sh "date --iso-8601=s > created_on"
       created_on = readFile('created_on').trim()
-      def AWS_TAGS="is_ci,true,ci_version,${RANCHER_VERSION},ci_server_os,${RANCHER_SERVER_OPERATINGSYSTEM},ci_agent_os,${RANCHER_AGENT_OPERATINGSYSTEM},owner,nrvale0,last_modified,${created_on}"
+      def AWS_TAGS="is_ci,true,ci_version,${RANCHER_VERSION},ci_server_os,${RANCHER_SERVER_OPERATINGSYSTEM},ci_agent_os,${RANCHER_AGENT_OPERATINGSYSTEM},owner,nrvale0,created_on,${created_on}"
 
       jenkinsSlack('start')
 
@@ -219,5 +219,8 @@ try {
     }
   }
 } catch(err) {
-    jenkinsSlack('finish')
+  currentBuild.result = 'FAILURE'
 }
+
+jenkinsSlack('finish')
+

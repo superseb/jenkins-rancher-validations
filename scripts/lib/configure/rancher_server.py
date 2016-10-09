@@ -88,7 +88,7 @@ def rancher_server_config_regURL(server):
 
      max_attempts = 30
      attempts = 0
-     step_time = 5
+     step_time = 10
      post_data = {}
 
      while attempts <= max_attempts:

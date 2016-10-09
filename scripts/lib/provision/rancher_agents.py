@@ -93,8 +93,30 @@ def aws_get_eip():
 
 
 #
+def docker_machine_ssh_user(os):
+     ssh_user = ''
+     if 'centos' in os:
+          ssh_user = 'centos'
+     elif 'ubuntu' in os:
+          ssh_user = 'ubuntu'
+     elif 'coreos' in os:
+          ssh_user = 'core'
+     elif 'rancheros' in os:
+          ssh_user = 'rancher'
+     else:
+          log.debug("Unsupported OS specified: \'{}\'".format(os))
+          return False
+     return ssh_user
+
+
+#
 def provision_rancher_agents():
      provision_agents = True
+
+     ssh_user = docker_machine_ssh_user(os.environ.get('RANCHER_AGENT_OPERATINGSYSTEM'))
+     if False is ssh_user:
+          log.debug('Failed to map specified OS to ssh username!')
+          return False
 
      aws_eip = aws_get_eip()
      if aws_eip is False:
@@ -145,6 +167,7 @@ def provision_rancher_agents():
                os.environ['AMAZONEC2_ACCESS_KEY'] = os.environ.get('AWS_ACCESS_KEY_ID')
                os.environ['AMAZONEC2_SECRET_KEY'] = os.environ.get('AWS_SECRET_ACCESS_KEY')
                os.environ['AMAZONEC2_REGION'] = os.environ.get('AWS_DEFAULT_REGION')
+               os.environ['AMAZONEC2_SSH_USER'] = ssh_user
                os.environ['CATTLE_AGENT_IP'] = aws_eip
 
                log.debug("Environment before provisioning agents:\n{}".format(os.environ.copy()))
@@ -167,9 +190,10 @@ def provision_rancher_agents():
 def wait_on_active_agents():
      cmd = "rancher host ls | grep active | wc -l"
 
-     max_elapsed = 600
+     # wait for max 20 minutes - that seems pretty extreme but...
+     max_elapsed = 1200
+     step_time = 60
      elapsed = 0
-     step_time = 30
 
      log.info("Waiting for at least 3 agents to become active...")
      start_time = time()
