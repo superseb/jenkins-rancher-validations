@@ -80,6 +80,22 @@ def provision_rancher_server():
      machine_name = "{}-{}-validation-tests-server0".format(aws_prefix, rancher_server_os)
      machine_state = docker_machine_status(machine_name)
 
+     ssh_username = ''
+
+     # depending on the operating system, need to make some adjustments to what is fed to docker-machine
+     # also, why does Python not have a case statement :\
+     if 'centos' in rancher_server_os:
+          ssh_username = 'centos'
+     elif 'ubuntu' in rancher_server_os:
+          ssh_username = 'ubuntu'
+     elif 'rancher' in rancher_server_os:
+          ssh_username = 'rancher'
+     elif 'coreos' in rancher_server_os:
+          ssh_username = 'core'
+     else:
+          log.error("Unsupported OS \'{}\' specified for rancher/server!".format(rancher_server_os))
+          return False
+
      ## provision the thing
      if 'Running' is machine_state:
           log.info("{} detected as running. No action necessary.".format(machine_name))
@@ -101,6 +117,7 @@ def provision_rancher_server():
                 "create " + \
                 "--driver amazonec2 " + \
                 "--amazonec2-security-group {} ".format(aws_security_group) + \
+                "--amazonec2-ssh-user {}".format(ssh_username) + \
                 "{}-{}-validation-tests-server0".format(aws_prefix, rancher_server_os)
 
           try:
