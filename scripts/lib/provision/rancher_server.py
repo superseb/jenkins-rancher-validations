@@ -134,7 +134,7 @@ def provision_rancher_server():
      try:
           rancher_version = os.environ.get('RANCHER_VERSION')
           log.info("Installing rancher/server:{}...".format(rancher_version))
-          cmd = "{} ssh {} -- sudo docker run -d --name rancher_server_{} -p 8080:8080 --restart=always rancher/server:{}"
+          cmd = "{} --native-ssh ssh {} sudo docker run -d --name rancher_server_{} -p 8080:8080 --restart=always rancher/server:{}"
           cmd = cmd.format(DOCKER_MACHINE, machine_name, rancher_version, rancher_version)
           run(cmd, output=True)
      except Failure as e:
@@ -170,6 +170,7 @@ def main():
      if server_address is False:
           err_and_exit("Failed while provisioning rancher/server!")
 
+     log.info("rancher/server instance availble at \'{}\'".format(server_address))
      log.info("Sleeping for 60 seconds to give rancher/server some time to settle...")
      sleep(60)
 

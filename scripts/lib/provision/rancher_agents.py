@@ -169,7 +169,7 @@ def wait_on_active_agents():
 
      max_elapsed = 600
      elapsed = 0
-     step_time = 10
+     step_time = 30
 
      log.info("Waiting for at least 3 agents to become active...")
      start_time = time()

@@ -66,6 +66,7 @@ def rancher_server_config_regtoken(server_name):
      while True:
           try:
                resp = requests.post(url, timeout=5)
+               log.info("HTTP POST: {}".format(resp.headers))
           except ConnectionError as e:
                log.debug("Failed to connect to \'{}\'! : {}".format(url, e))
                elapsed_time = time() - start_time
@@ -85,7 +86,7 @@ def rancher_server_config_regURL(server):
 
      log.info("Configuring rancher/server registration URL...")
 
-     max_attempts = 10
+     max_attempts = 30
      attempts = 0
      step_time = 5
      post_data = {}
@@ -104,12 +105,13 @@ def rancher_server_config_regURL(server):
                            "value": "http://{}:8080".format(server)}
                log.debug("PUT: {} :: {}".format(url, put_data))
                resp = requests.put(url, put_data, timeout=5)
+               log.info("HTTP PUT: {}".format(resp.headers))
                break
 
           except (HTTPError, ConnectionError) as e:
                log.debug("PUT failed: {} :: {} :: {}".format(url, put_data, e))
                if attempts >= max_attempts:
-                    log.debug("Exceeded max attempts!".format(url))
+                    log.error("Exceeded max attempts!".format(url))
                     return False
                sleep(step_time)
 
@@ -132,7 +134,7 @@ def configure_rancher_server():
           return False
 
      if rancher_server_config_regURL(server_address) is False:
-          log.error("Failed to set the agent reg URl on \'{}\'!".format(server_name))
+          log.error("Failed to set the agent reg URL on \'{}\'!".format(server_name))
           return False
 
      return True
