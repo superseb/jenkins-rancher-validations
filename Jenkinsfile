@@ -121,16 +121,18 @@ node {
 	sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
 	  "-e AWS_PREFIX=${AWS_PREFIX} " +
 	  "-e RANCHER_AGENT_OPERATINGSYSTEM=${RANCHER_AGENT_OPERATINGSYSTEM} " +
+	  "-e RANCHER_SERVER_MISSING_OK=true " +
 	  "-e DEBUG=\'${DEBUG}\' " +
 	  "rancherlabs/ci-validation-tests deprovision rancher_agents"
-      
+
       stage "deprovision pre-existing rancher/server"
 	sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
 	  "-e AWS_PREFIX=${AWS_PREFIX} " +
 	  "-e RANCHER_SERVER_OPERATINGSYSTEM=${RANCHER_SERVER_OPERATINGSYSTEM} " +
+	  "-e RANCHER_SERVER_MISSING_OK=true " +
 	  "-e DEBUG=\'${DEBUG}\' " +
 	  "rancherlabs/ci-validation-tests deprovision rancher_server"
-	
+
       stage "provision rancher/server"
       sh "set +x ; docker run --rm -v \"\$(pwd)\":/workdir " +
 	"-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +

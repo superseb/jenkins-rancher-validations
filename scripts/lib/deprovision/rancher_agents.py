@@ -51,8 +51,11 @@ def deprovision_rancher_agents():
           run(cmd, echo=True)
 
      except Failure as e:
-          log.error("Failed while deprovisioning Rancher Agents!: {} :: {}".format(e.result.return_code, e.result.stderr))
-          return False
+          if 'RANCHER_SERVER_MISSING_OK' in os.environ and 'Host does not exist' in e.result.stderr:
+               log.debug("Did not find a node for hosting rancher/server at \'{}\'...assuming that is ok.".format(machine_name))
+          else:
+               log.error("Failed while deprovisioning Rancher Agents!: {} :: {}".format(e.result.return_code, e.result.stderr))
+               return False
 
      return True
 
