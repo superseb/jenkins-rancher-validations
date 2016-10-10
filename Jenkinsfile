@@ -34,7 +34,7 @@ def lastBuildResult() {
 
 
 // simplify the generation of Slack notifications for start and finish of Job
-def jenkinsSlack(type, channel='#nathan-webhooks') {
+def jenkinsSlack(type, channel='#ci_cd') {
   def rancher_version = rancher_version()
   def jobInfo = "\n » ${rancher_version} :: ${env.JOB_NAME} ${env.BUILD_NUMBER} (<${env.BUILD_URL}|job>) (<${env.BUILD_URL}/console|console>)"
   if (type == 'start'){
@@ -182,7 +182,7 @@ try {
 	sh './scripts/get_validation-tests.sh'
 
 	try {
-	  sh '. ./cattle_test_url.sh && py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/core/test_container.py'
+	  sh '. ./cattle_test_url.sh && py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest'
 	} catch(err) {
 	  echo 'Test run had failures. Collecting results...'
 	  echo 'Will not deprovision infrastructure to allow for post-mortem....'
