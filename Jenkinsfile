@@ -38,11 +38,16 @@ def lastBuildResult() {
 
 
 // should we just provision and stop or actually run tests?
-def should_exec_tests() {
+def provision_only() {
   if (os.environ.get('PIPELINE_PROVISION_ONLY')) { return true }
   else { return false }
 }
 
+// should we just provision and stop or actually run tests?
+def deprovision_only() {
+  if (os.environ.get('PIPELINE_DEPROVISION_ONLY')) { return true }
+  else { return false }
+}
 
 // simplify the generation of Slack notifications for start and finish of Job
 def jenkinsSlack(type, channel='#ci_cd') {
@@ -145,92 +150,97 @@ try {
 	  "-e DEBUG=\'${DEBUG}\' " +
 	  "rancherlabs/ci-validation-tests deprovision rancher_server"
 
-	stage "provision rancher/server"
-	sh "set +x ; docker run --rm -v \"\$(pwd)\":/workdir " +
-	  "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
-	  "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
-	  "-e AWS_PREFIX=${AWS_PREFIX} " +
-	  "-e AWS_AMI=${AWS_AMI} " +
-	  "-e AWS_INSTANCE_TYPE=${AWS_INSTANCE_TYPE} " +
-	  "-e AWS_TAGS=${AWS_TAGS} " +
-	  "-e AWS_VPC_ID=${AWS_VPC_ID} " +
-	  "-e AWS_SUBNET_ID=${AWS_SUBNET_ID} " +
-	  "-e AWS_SECURITY_GROUP=${AWS_SECURITY_GROUP} " +
-	  "-e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} " +
-	  "-e AWS_ZONE=${AWS_ZONE} " +
-	  "-e RANCHER_VERSION=${RANCHER_VERSION} " +
-	  "-e RANCHER_SERVER_OPERATINGSYSTEM=${RANCHER_SERVER_OPERATINGSYSTEM} " +
-	  "-e DEBUG=\'${DEBUG}\' " +
-	  "rancherlabs/ci-validation-tests provision rancher_server"
+	if ( false == deprovision_only() ) {
+	  stage "provision rancher/server"
+	  sh "set +x ; docker run --rm -v \"\$(pwd)\":/workdir " +
+	    "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
+	    "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
+	    "-e AWS_PREFIX=${AWS_PREFIX} " +
+	    "-e AWS_AMI=${AWS_AMI} " +
+	    "-e AWS_INSTANCE_TYPE=${AWS_INSTANCE_TYPE} " +
+	    "-e AWS_TAGS=${AWS_TAGS} " +
+	    "-e AWS_VPC_ID=${AWS_VPC_ID} " +
+	    "-e AWS_SUBNET_ID=${AWS_SUBNET_ID} " +
+	    "-e AWS_SECURITY_GROUP=${AWS_SECURITY_GROUP} " +
+	    "-e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} " +
+	    "-e AWS_ZONE=${AWS_ZONE} " +
+	    "-e RANCHER_VERSION=${RANCHER_VERSION} " +
+	    "-e RANCHER_SERVER_OPERATINGSYSTEM=${RANCHER_SERVER_OPERATINGSYSTEM} " +
+	    "-e DEBUG=\'${DEBUG}\' " +
+	    "rancherlabs/ci-validation-tests provision rancher_server"
 
-	stage "configure rancher/server for test environment"
-	sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
-	  "-e AWS_PREFIX=${AWS_PREFIX} " +
-	  "-e RANCHER_SERVER_OPERATINGSYSTEM=${RANCHER_SERVER_OPERATINGSYSTEM} " +
-	  "-e DEBUG=\'${DEBUG}\' " +
-	  "rancherlabs/ci-validation-tests configure rancher_server"
+	  stage "configure rancher/server for test environment"
+	  sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
+	    "-e AWS_PREFIX=${AWS_PREFIX} " +
+	    "-e RANCHER_SERVER_OPERATINGSYSTEM=${RANCHER_SERVER_OPERATINGSYSTEM} " +
+	    "-e DEBUG=\'${DEBUG}\' " +
+	    "rancherlabs/ci-validation-tests configure rancher_server"
 
-	stage "provision Rancher Agents"
-	/*    input message: "Proceed with provisioning Rancher Agents?" */
-	sh "set +x; set +x ; docker run --rm -v \"\$(pwd)\":/workdir " +
-	  "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
-	  "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
-	  "-e AWS_PREFIX=${AWS_PREFIX} " +
-	  "-e AWS_AMI=${AWS_AGENT_AMI} " +
-	  "-e AWS_TAGS=${AWS_TAGS} " +
-	  "-e AWS_VPC_ID=${AWS_VPC_ID} " +
-	  "-e AWS_SUBNET_ID=${AWS_SUBNET_ID} " +
-	  "-e AWS_SECURITY_GROUP=${AWS_SECURITY_GROUP} " +
-	  "-e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} " +
-	  "-e AWS_ZONE=${AWS_ZONE} " +
-	  "-e AWS_INSTANCE_TYPE=${AWS_AGENT_INSTANCE_TYPE} " +
-	  "-e RANCHER_AGENT_OPERATINGSYSTEM=${RANCHER_AGENT_OPERATINGSYSTEM} " +
-	  "-e DEBUG=\'${DEBUG}\' " +
-	  "rancherlabs/ci-validation-tests provision rancher_agents"
+	  stage "provision Rancher Agents"
+	  /*    input message: "Proceed with provisioning Rancher Agents?" */
+	  sh "set +x; set +x ; docker run --rm -v \"\$(pwd)\":/workdir " +
+	    "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
+	    "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
+	    "-e AWS_PREFIX=${AWS_PREFIX} " +
+	    "-e AWS_AMI=${AWS_AGENT_AMI} " +
+	    "-e AWS_TAGS=${AWS_TAGS} " +
+	    "-e AWS_VPC_ID=${AWS_VPC_ID} " +
+	    "-e AWS_SUBNET_ID=${AWS_SUBNET_ID} " +
+	    "-e AWS_SECURITY_GROUP=${AWS_SECURITY_GROUP} " +
+	    "-e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} " +
+	    "-e AWS_ZONE=${AWS_ZONE} " +
+	    "-e AWS_INSTANCE_TYPE=${AWS_AGENT_INSTANCE_TYPE} " +
+	    "-e RANCHER_AGENT_OPERATINGSYSTEM=${RANCHER_AGENT_OPERATINGSYSTEM} " +
+	    "-e DEBUG=\'${DEBUG}\' " +
+	    "rancherlabs/ci-validation-tests provision rancher_agents"
 
-	if (should_exec_tests()) {
+	  if ( false == provision_only() ) {
+	  
+	    stage "run validation tests"
+	    if ("${env.DEBUG}") { input message: "Proceed with running validation tests?" }
+	    sh './scripts/get_validation-tests.sh'
+	    
+	    try {
+	      sh '. ./cattle_test_url.sh && py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest'
+	    } catch(err) {
+	      echo 'Test run had failures. Collecting results...'
+	      echo 'Will not deprovision infrastructure to allow for post-mortem....'
+	    }
 
-	  stage "run validation tests"
-	  if ("${env.DEBUG}") { input message: "Proceed with running validation tests?" }
-	  sh './scripts/get_validation-tests.sh'
+	    step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
 
-	  try {
-	    sh '. ./cattle_test_url.sh && py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest'
-	  } catch(err) {
-	    echo 'Test run had failures. Collecting results...'
-	    echo 'Will not deprovision infrastructure to allow for post-mortem....'
+	    if ( 'UNSTABLE' != currentBuild.result ) {
+	      stage "deprovision Rancher Agents"
+	      sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
+		"-e AWS_PREFIX=${AWS_PREFIX} " +
+		"-e RANCHER_AGENT_OPERATINGSYSTEM=${RANCHER_AGENT_OPERATINGSYSTEM} " +
+		"-e DEBUG=\'${DEBUG}\' " +
+		"rancherlabs/ci-validation-tests deprovision rancher_agents"
+
+	      stage "deprovision rancher/server"
+	      sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
+		"-e AWS_PREFIX=${AWS_PREFIX} " +
+		"-e RANCHER_SERVER_OPERATINGSYSTEM=${RANCHER_SERVER_OPERATINGSYSTEM} " +
+		"-e DEBUG=\'${DEBUG}\' " +
+		"rancherlabs/ci-validation-tests deprovision rancher_server"
+		
+		/* I'm not aware of any cost associated with leaving VPC in place and it saves time to re-use with multiple runs. */
+		/*  stage "deprovision AWS"
+		    sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
+		    "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
+		    "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
+		    "-e AWS_PREFIX=${GIT_COMMIT} " +
+		    "-e DEBUG=\'${DEBUG}\' " +
+		    "rancherlabs/ci-validation-tests deprovision aws"
+		*/
 	  }
 
-	  step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
-
-	  if ( 'UNSTABLE' != currentBuild.result ) {
-	    stage "deprovision Rancher Agents"
-	    sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
-	      "-e AWS_PREFIX=${AWS_PREFIX} " +
-	      "-e RANCHER_AGENT_OPERATINGSYSTEM=${RANCHER_AGENT_OPERATINGSYSTEM} " +
-	      "-e DEBUG=\'${DEBUG}\' " +
-	      "rancherlabs/ci-validation-tests deprovision rancher_agents"
-
-	    stage "deprovision rancher/server"
-	    sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
-	      "-e AWS_PREFIX=${AWS_PREFIX} " +
-	      "-e RANCHER_SERVER_OPERATINGSYSTEM=${RANCHER_SERVER_OPERATINGSYSTEM} " +
-	      "-e DEBUG=\'${DEBUG}\' " +
-	      "rancherlabs/ci-validation-tests deprovision rancher_server"
-
-	      /* I'm not aware of any cost associated with leaving VPC in place and it saves time to re-use with multiple runs. */
-	      /*  stage "deprovision AWS"
-		  sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
-		  "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
-		  "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
-		  "-e AWS_PREFIX=${GIT_COMMIT} " +
-		  "-e DEBUG=\'${DEBUG}\' " +
-		  "rancherlabs/ci-validation-tests deprovision aws"
-	      */
+	  } else {
+	    echo 'User specified provision-only mode via PIPELINE_PROVISION_ONLY.'
+	    currentBuild.result = 'SUCCESS'
 	  }
-
 	} else {
-	  echo 'User specified provision-only mode via PIPELINE_PROVISION_ONLY.'
+	  echo 'User specified deprovision-only mode via PIPELINE_DEPROVISION_ONLY.'
 	  currentBuild.result = 'SUCCESS'
 	}
       }
