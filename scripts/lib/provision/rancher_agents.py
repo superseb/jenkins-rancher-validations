@@ -113,7 +113,7 @@ def provision_rancher_agents():
 
      ssh_user = docker_machine_ssh_user(os.environ.get('RANCHER_AGENT_OPERATINGSYSTEM'))
      agent_os = os.environ.get('RANCHER_AGENT_OPERATINGSYSTEM')
-     aws_security_group = os.enviorn.get('AWS_SECURITY_GROUP')
+     aws_security_group = os.environ.get('AWS_SECURITY_GROUP')
 
      if False is ssh_user:
           log.debug('Failed to map specified OS to ssh username!')
