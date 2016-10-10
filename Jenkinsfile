@@ -28,8 +28,19 @@ def aws_prefix() {
 
 // get the result of the previous Job run
 def lastBuildResult() {
-  def previous_build = currentBuild.getPreviousBuild()
-  if (null !=  previous_build) { previous_build.result } else { 'UNKNOWN' }
+  ret = false
+  try {
+    ret = ${PIPELINE_PROVISION_ONLY}
+  } catch (MissingPropertyException e) {}
+
+  return ret
+}
+
+
+// should we just provision and stop or actually run tests?
+def should_exec_tests() {
+  if (os.environ.get('PIPELINE_PROVISION_ONLY')) { return true }
+  else { return false }
 }
 
 
@@ -151,7 +162,7 @@ try {
 	  "-e RANCHER_SERVER_OPERATINGSYSTEM=${RANCHER_SERVER_OPERATINGSYSTEM} " +
 	  "-e DEBUG=\'${DEBUG}\' " +
 	  "rancherlabs/ci-validation-tests provision rancher_server"
-	  
+
 	stage "configure rancher/server for test environment"
 	sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
 	  "-e AWS_PREFIX=${AWS_PREFIX} " +
@@ -177,50 +188,57 @@ try {
 	  "-e DEBUG=\'${DEBUG}\' " +
 	  "rancherlabs/ci-validation-tests provision rancher_agents"
 
-	stage "run validation tests"
-	if ("${env.DEBUG}") { input message: "Proceed with running validation tests?" }
-	sh './scripts/get_validation-tests.sh'
+	if (should_exec_tests()) {
 
-	try {
-	  sh '. ./cattle_test_url.sh && py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest'
-	} catch(err) {
-	  echo 'Test run had failures. Collecting results...'
-	  echo 'Will not deprovision infrastructure to allow for post-mortem....'
-	}
+	  stage "run validation tests"
+	  if ("${env.DEBUG}") { input message: "Proceed with running validation tests?" }
+	  sh './scripts/get_validation-tests.sh'
 
-	step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
+	  try {
+	    sh '. ./cattle_test_url.sh && py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest'
+	  } catch(err) {
+	    echo 'Test run had failures. Collecting results...'
+	    echo 'Will not deprovision infrastructure to allow for post-mortem....'
+	  }
 
-	if ( 'UNSTABLE' != currentBuild.result ) {
-	  stage "deprovision Rancher Agents"
-	  sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
-	    "-e AWS_PREFIX=${AWS_PREFIX} " +
-	    "-e RANCHER_AGENT_OPERATINGSYSTEM=${RANCHER_AGENT_OPERATINGSYSTEM} " +
-	    "-e DEBUG=\'${DEBUG}\' " +
-	    "rancherlabs/ci-validation-tests deprovision rancher_agents"
+	  step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
 
-	  stage "deprovision rancher/server"
-	  sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
-	    "-e AWS_PREFIX=${AWS_PREFIX} " +
-	    "-e RANCHER_SERVER_OPERATINGSYSTEM=${RANCHER_SERVER_OPERATINGSYSTEM} " +
-	    "-e DEBUG=\'${DEBUG}\' " +
-	    "rancherlabs/ci-validation-tests deprovision rancher_server"
+	  if ( 'UNSTABLE' != currentBuild.result ) {
+	    stage "deprovision Rancher Agents"
+	    sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
+	      "-e AWS_PREFIX=${AWS_PREFIX} " +
+	      "-e RANCHER_AGENT_OPERATINGSYSTEM=${RANCHER_AGENT_OPERATINGSYSTEM} " +
+	      "-e DEBUG=\'${DEBUG}\' " +
+	      "rancherlabs/ci-validation-tests deprovision rancher_agents"
 
-	  /* I'm not aware of any cost associated with leaving VPC in place and it saves time to re-use with multiple runs. */
-	    /*  stage "deprovision AWS"
-		sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
-		"-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
-		"-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
-		"-e AWS_PREFIX=${GIT_COMMIT} " +
-		"-e DEBUG=\'${DEBUG}\' " +
-		"rancherlabs/ci-validation-tests deprovision aws"
-	    */
+	    stage "deprovision rancher/server"
+	    sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
+	      "-e AWS_PREFIX=${AWS_PREFIX} " +
+	      "-e RANCHER_SERVER_OPERATINGSYSTEM=${RANCHER_SERVER_OPERATINGSYSTEM} " +
+	      "-e DEBUG=\'${DEBUG}\' " +
+	      "rancherlabs/ci-validation-tests deprovision rancher_server"
+
+	      /* I'm not aware of any cost associated with leaving VPC in place and it saves time to re-use with multiple runs. */
+	      /*  stage "deprovision AWS"
+		  sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
+		  "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
+		  "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
+		  "-e AWS_PREFIX=${GIT_COMMIT} " +
+		  "-e DEBUG=\'${DEBUG}\' " +
+		  "rancherlabs/ci-validation-tests deprovision aws"
+	      */
+	  }
+
+	} else {
+	  echo 'User specified provision-only mode via PIPELINE_PROVISION_ONLY.'
+	  currentBuild.result = 'SUCCESS'
 	}
       }
     }
   }
+
 } catch(err) {
   currentBuild.result = 'FAILURE'
 }
 
 jenkinsSlack('finish')
-
