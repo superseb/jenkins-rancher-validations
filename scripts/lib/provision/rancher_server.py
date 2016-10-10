@@ -117,8 +117,12 @@ def provision_rancher_server():
                 "create " + \
                 "--driver amazonec2 " + \
                 "--amazonec2-security-group {} ".format(aws_security_group) + \
-                "--amazonec2-ssh-user {} ".format(ssh_username) + \
-                "{}-{}-validation-tests-server0".format(aws_prefix, rancher_server_os)
+                "--amazonec2-ssh-user {} ".format(ssh_username)
+
+          if 'coreos' in rancher_server_os:
+               cmd += "--amazonec2-device-name /dev/xvda "
+
+          cmd += "{}-{}-validation-tests-server0".format(aws_prefix, rancher_server_os)
 
           try:
                run(cmd, echo=True)
