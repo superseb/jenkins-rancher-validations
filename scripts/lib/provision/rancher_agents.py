@@ -178,6 +178,17 @@ def provision_rancher_agents():
                     agent_name = "{}-{}-validation-tests-{}".format(aws_prefix, agent_os, agent)
                     log.info("Creating Rancher Agent \'{}\'...".format(agent_name))
                     cmd = "rancher host create --driver amazonec2 "
+
+                    if 'coreos' in agent_os:
+                         cmd += '--amazonec2-device-name /dev/xvda '
+                         cmd += '--amazonec2-ssh-user core '
+
+                    if 'centos' in agent_os:
+                         cmd += '--amazonec2-ssh-user centos '
+
+                    if 'rancher' in agent_os:
+                         cmd += '--amazonec2-ssh-user rancher '
+
                     cmd += "--amazonec2-security-group={} {}".format(aws_security_group, agent_name)
                     run(cmd, echo=True)
 
