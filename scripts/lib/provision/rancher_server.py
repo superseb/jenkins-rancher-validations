@@ -80,6 +80,22 @@ def provision_rancher_server():
      machine_name = "{}-{}-validation-tests-server0".format(aws_prefix, rancher_server_os)
      machine_state = docker_machine_status(machine_name)
 
+     ssh_username = ''
+
+     # depending on the operating system, need to make some adjustments to what is fed to docker-machine
+     # also, why does Python not have a case statement :\
+     if 'centos' in rancher_server_os:
+          ssh_username = 'centos'
+     elif 'ubuntu' in rancher_server_os:
+          ssh_username = 'ubuntu'
+     elif 'rancher' in rancher_server_os:
+          ssh_username = 'rancher'
+     elif 'coreos' in rancher_server_os:
+          ssh_username = 'core'
+     else:
+          log.error("Unsupported OS \'{}\' specified for rancher/server!".format(rancher_server_os))
+          return False
+
      ## provision the thing
      if 'Running' is machine_state:
           log.info("{} detected as running. No action necessary.".format(machine_name))
@@ -101,7 +117,12 @@ def provision_rancher_server():
                 "create " + \
                 "--driver amazonec2 " + \
                 "--amazonec2-security-group {} ".format(aws_security_group) + \
-                "{}-{}-validation-tests-server0".format(aws_prefix, rancher_server_os)
+                "--amazonec2-ssh-user {} ".format(ssh_username)
+
+          if 'coreos' in rancher_server_os:
+               cmd += "--amazonec2-device-name /dev/xvda "
+
+          cmd += "{}-{}-validation-tests-server0".format(aws_prefix, rancher_server_os)
 
           try:
                run(cmd, echo=True)
@@ -117,7 +138,7 @@ def provision_rancher_server():
      try:
           rancher_version = os.environ.get('RANCHER_VERSION')
           log.info("Installing rancher/server:{}...".format(rancher_version))
-          cmd = "{} ssh {} -- sudo docker run -d --name rancher_server_{} -p 8080:8080 --restart=always rancher/server:{}"
+          cmd = "{} --native-ssh ssh {} sudo docker run -d --name rancher_server_{} -p 8080:8080 --restart=always rancher/server:{}"
           cmd = cmd.format(DOCKER_MACHINE, machine_name, rancher_version, rancher_version)
           run(cmd, output=True)
      except Failure as e:
@@ -153,6 +174,7 @@ def main():
      if server_address is False:
           err_and_exit("Failed while provisioning rancher/server!")
 
+     log.info("rancher/server instance availble at \'{}\'".format(server_address))
      log.info("Sleeping for 60 seconds to give rancher/server some time to settle...")
      sleep(60)
 

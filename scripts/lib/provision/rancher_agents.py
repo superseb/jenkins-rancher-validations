@@ -93,8 +93,31 @@ def aws_get_eip():
 
 
 #
+def docker_machine_ssh_user(os):
+     if 'centos' in os:
+          return 'centos'
+     elif 'ubuntu' in os:
+          return 'ubuntu'
+     elif 'coreos' in os:
+          return 'core'
+     elif 'rancheros' in os:
+          return 'rancher'
+     else:
+          log.debug("Unsupported OS specified: \'{}\'".format(os))
+          return False
+
+
+#
 def provision_rancher_agents():
      provision_agents = True
+
+     ssh_user = docker_machine_ssh_user(os.environ.get('RANCHER_AGENT_OPERATINGSYSTEM'))
+     agent_os = os.environ.get('RANCHER_AGENT_OPERATINGSYSTEM')
+     aws_security_group = os.environ.get('AWS_SECURITY_GROUP')
+
+     if False is ssh_user:
+          log.debug('Failed to map specified OS to ssh username!')
+          return False
 
      aws_eip = aws_get_eip()
      if aws_eip is False:
@@ -105,7 +128,7 @@ def provision_rancher_agents():
           aws_prefix = os.environ.get('AWS_PREFIX')
 
           # make sure we can talk to the rancher/server
-          cmd = DOCKER_MACHINE + " ip {}-{}-validation-tests-server0".format(aws_prefix, os.environ['RANCHER_AGENT_OPERATINGSYSTEM'])
+          cmd = DOCKER_MACHINE + " ip {}-{}-validation-tests-server0".format(aws_prefix, agent_os)
           result = run(cmd, echo=True)
           server_address = result.stdout.rstrip(os.linesep)
           log.debug("rancher/server address is {}".format(server_address))
@@ -145,15 +168,28 @@ def provision_rancher_agents():
                os.environ['AMAZONEC2_ACCESS_KEY'] = os.environ.get('AWS_ACCESS_KEY_ID')
                os.environ['AMAZONEC2_SECRET_KEY'] = os.environ.get('AWS_SECRET_ACCESS_KEY')
                os.environ['AMAZONEC2_REGION'] = os.environ.get('AWS_DEFAULT_REGION')
+#               os.environ['AMAZONEC2_DEVICE_NAME'] = root_device
                os.environ['CATTLE_AGENT_IP'] = aws_eip
 
                log.debug("Environment before provisioning agents:\n{}".format(os.environ.copy()))
 
                # FIXME: do this in parallel!
                for agent in ['agent0', 'agent1', 'agent2']:
-                    agent_name = "{}-{}-validation-tests-{}".format(aws_prefix, os.environ['RANCHER_AGENT_OPERATINGSYSTEM'], agent)
+                    agent_name = "{}-{}-validation-tests-{}".format(aws_prefix, agent_os, agent)
                     log.info("Creating Rancher Agent \'{}\'...".format(agent_name))
-                    cmd = "rancher host create --driver amazonec2 --amazonec2-security-group={} {}".format(os.environ['AWS_SECURITY_GROUP'], agent_name)
+                    cmd = "rancher host create --driver amazonec2 "
+
+                    if 'coreos' in agent_os:
+                         cmd += '--amazonec2-device-name /dev/xvda '
+                         cmd += '--amazonec2-ssh-user core '
+
+                    if 'centos' in agent_os:
+                         cmd += '--amazonec2-ssh-user centos '
+
+                    if 'rancher' in agent_os:
+                         cmd += '--amazonec2-ssh-user rancher '
+
+                    cmd += "--amazonec2-security-group={} {}".format(aws_security_group, agent_name)
                     run(cmd, echo=True)
 
      except Failure as e:
@@ -167,9 +203,10 @@ def provision_rancher_agents():
 def wait_on_active_agents():
      cmd = "rancher host ls | grep active | wc -l"
 
-     max_elapsed = 600
+     # wait for max 20 minutes - that seems pretty extreme but...
+     max_elapsed = 1200
+     step_time = 60
      elapsed = 0
-     step_time = 10
 
      log.info("Waiting for at least 3 agents to become active...")
      start_time = time()
