@@ -59,8 +59,10 @@ def missing_envvars(envvars=['AWS_PREFIX', 'RANCHER_AGENT_OPERATINGSYSTEM']):
 
 #
 def deprovision_rancher_agents():
-
-     machine_name = "{}-{}-validation-tests-server0".format(os.environ.get('AWS_PREFIX'), os.environ.get('RANCHER_AGENT_OPERATINGSYSTEM'))
+     aws_prefix = os.environ.get('AWS_PREFIX')
+     machine_name = "{}-validation-tests-server0".format(os.environ.get('RANCHER_AGENT_OPERATINGSYSTEM'))
+     if aws_prefix:
+          machine_name = "{}-".format(aws_prefix) + machine_name
 
      try:
           server_address = run(DOCKER_MACHINE + " ip {}".format(machine_name), echo=True).stdout.rstrip()

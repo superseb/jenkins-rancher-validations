@@ -121,8 +121,11 @@ def rancher_server_config_regURL(server):
 
 #
 def configure_rancher_server():
+     aws_prefix = os.environ.get('AWS_PREFIX')
 
-     server_name = "{}-{}-validation-tests-server0".format(os.environ.get('AWS_PREFIX'), os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM'))
+     server_name = "{}-validation-tests-server0".format(os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM'))
+     if aws_prefix:
+          server_name = "{}-".format(aws_prefix) + server_name
 
      server_address = rancher_server_ip(server_name)
      if server_address is False:

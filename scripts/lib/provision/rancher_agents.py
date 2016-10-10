@@ -127,8 +127,12 @@ def provision_rancher_agents():
      try:
           aws_prefix = os.environ.get('AWS_PREFIX')
 
+          server_name = "{}-validation-tests-server0".format(agent_os)
+          if aws_prefix:
+               server_name = "{}-".format(aws_prefix) + server_name
+
           # make sure we can talk to the rancher/server
-          cmd = DOCKER_MACHINE + " ip {}-{}-validation-tests-server0".format(aws_prefix, agent_os)
+          cmd = DOCKER_MACHINE + " ip {}".format(server_name)
           result = run(cmd, echo=True)
           server_address = result.stdout.rstrip(os.linesep)
           log.debug("rancher/server address is {}".format(server_address))
@@ -175,7 +179,10 @@ def provision_rancher_agents():
 
                # FIXME: do this in parallel!
                for agent in ['agent0', 'agent1', 'agent2']:
-                    agent_name = "{}-{}-validation-tests-{}".format(aws_prefix, agent_os, agent)
+                    agent_name = "{}-validation-tests-{}".format(agent_os, agent)
+                    if aws_prefix:
+                         agent_name = "{}-".format(aws_prefix) + agent_name
+
                     log.info("Creating Rancher Agent \'{}\'...".format(agent_name))
                     cmd = "rancher host create --driver amazonec2 "
 

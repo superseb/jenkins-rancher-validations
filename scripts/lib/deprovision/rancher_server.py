@@ -41,7 +41,11 @@ def missing_envvars(envvars=['AWS_PREFIX', 'RANCHER_SERVER_OPERATINGSYSTEM']):
 #
 def deprovision_rancher_server():
 
-     machine_name = "{}-{}-validation-tests-server0".format(os.environ.get('AWS_PREFIX'), os.environ['RANCHER_SERVER_OPERATINGSYSTEM'])
+     aws_prefix = os.environ.get('AWS_PREFIX')
+
+     machine_name = "{}-validation-tests-server0".format(os.environ['RANCHER_SERVER_OPERATINGSYSTEM'])
+     if aws_prefix:
+          machine_name = "{}-".format(aws_prefix) + machine_name
 
      try:
           cmd = DOCKER_MACHINE + "rm -y {}".format(machine_name)

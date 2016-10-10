@@ -77,7 +77,11 @@ def provision_rancher_server():
      aws_prefix = os.environ.get('AWS_PREFIX')
      aws_security_group = os.environ.get('AWS_SECURITY_GROUP')
      rancher_server_os = os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM')
-     machine_name = "{}-{}-validation-tests-server0".format(aws_prefix, rancher_server_os)
+
+     machine_name = "{}-validation-tests-server0".format(rancher_server_os)
+     if aws_prefix:
+          machine_name = "{}-".format(aws_prefix) + machine_name
+
      machine_state = docker_machine_status(machine_name)
 
      ssh_username = ''
@@ -122,7 +126,7 @@ def provision_rancher_server():
           if 'coreos' in rancher_server_os:
                cmd += "--amazonec2-device-name /dev/xvda "
 
-          cmd += "{}-{}-validation-tests-server0".format(aws_prefix, rancher_server_os)
+          cmd += machine_name
 
           try:
                run(cmd, echo=True)
