@@ -9,7 +9,14 @@ def rancher_version() {
   try { return DOCKER_TRIGGER_TAG }
   catch (MissingPropertyException e) {}
 
-  error('Neither RANCHER_SERVER_TAG nor DOCKER_TRIGGER_TAG have been specified!')
+  echo  'Neither RANCHER_SERVER_TAG nor DOCKER_TRIGGER_TAG have been specified!'
+  error()
+}
+
+
+def resolve_slack_channel() {
+  try { if ( SLACK_CHANNEL ) { return "${SLACK_CHANNEL}" } }
+  catch (MissingPropertyException e) { return "#ci_cd" }
 }
 
 
@@ -22,37 +29,36 @@ def special_prefix() {
 def aws_prefix() {
   new_prefix = rancher_version()
   new_prefix = special_prefix() + "-${new_prefix}"
-  "${new_prefix}"
+  return "${new_prefix}"
 }
 
 
 // get the result of the previous Job run
 def lastBuildResult() {
-  ret = false
-  try {
-    ret = ${PIPELINE_PROVISION_ONLY}
-  } catch (MissingPropertyException e) {}
-
-  return ret
+  def previous_build = currentBuild.getPreviousBuild()
+  if ( null != previous_build ) { return previous_build.result } else { return 'UKNOWN' }
 }
 
 
 // should we just provision and stop or actually run tests?
-def provision_only() {
-  if (os.environ.get('PIPELINE_PROVISION_ONLY')) { return true }
-  else { return false }
+def stop_at_provision() {
+  try { return 'true' == PIPELINE_PROVISION_STOP }
+  catch (MissingPropertyException e) { return false }
 }
 
+
 // should we just provision and stop or actually run tests?
-def deprovision_only() {
-  if (os.environ.get('PIPELINE_DEPROVISION_ONLY')) { return true }
-  else { return false }
+def stop_at_deprovision() {
+  try { return 'true' == PIPELINE_DEPROVISION_STOP }
+  catch (MissingPropertyException e) { return false }
 }
+
 
 // simplify the generation of Slack notifications for start and finish of Job
-def jenkinsSlack(type, channel='#ci_cd') {
+def jenkinsSlack(type, channel=resolve_slack_channel()) {
   def rancher_version = rancher_version()
   def jobInfo = "\n » ${rancher_version} :: ${env.JOB_NAME} ${env.BUILD_NUMBER} (<${env.BUILD_URL}|job>) (<${env.BUILD_URL}/console|console>)"
+  
   if (type == 'start'){
     slackSend channel: "${channel}", color: 'blue', message: "build started${jobInfo}"
   }
@@ -84,6 +90,9 @@ try {
     } else {
       echo "Test run trigger manually or via scheduled run..."
     }
+
+    if ( stop_at_provision() ) { echo 'User specified pipeline should stop after provisioning...' }
+    if ( stop_at_deprovision() ) { echo 'User specified pipeline should stop after deprovisioning any pre-exiting infrastructure...' }
 
     if ( 'master' == rancher_version() && true == triggered_via_webhook() ) {
       echo "We do not fire test runs for branch 'master' triggered via a webhook. Scheduled or manual only, thanks."
@@ -127,13 +136,6 @@ try {
 	stage "lint"
 	sh 'set +x ; docker run --rm -v "$(pwd)":/workdir rancherlabs/ci-validation-tests lint'
 
-	stage "provision AWS"
-	sh "set +x ; docker run --rm -v \"\$(pwd)\":/workdir " +
-	  "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
-	  "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
-	  "-e DEBUG=\'${DEBUG}\' " +
-	  "rancherlabs/ci-validation-tests provision aws"
-
 	stage "deprovision pre-existing Rancher Agents"
 	sh "set +x; docker run --rm -v \"\$(pwd)\":/workdir " +
 	  "-e AWS_PREFIX=${AWS_PREFIX} " +
@@ -150,7 +152,14 @@ try {
 	  "-e DEBUG=\'${DEBUG}\' " +
 	  "rancherlabs/ci-validation-tests deprovision rancher_server"
 
-	if ( false == deprovision_only() ) {
+	if ( false == stop_at_deprovision() ) {
+	  stage "provision AWS"
+	  sh "set +x ; docker run --rm -v \"\$(pwd)\":/workdir " +
+	    "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
+	    "-e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} " +
+	    "-e DEBUG=\'${DEBUG}\' " +
+	    "rancherlabs/ci-validation-tests provision aws"
+
 	  stage "provision rancher/server"
 	  sh "set +x ; docker run --rm -v \"\$(pwd)\":/workdir " +
 	    "-e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} " +
@@ -194,8 +203,8 @@ try {
 	    "-e DEBUG=\'${DEBUG}\' " +
 	    "rancherlabs/ci-validation-tests provision rancher_agents"
 
-	  if ( false == provision_only() ) {
-	  
+
+	  if ( false == stop_at_provision() ) {
 	    stage "run validation tests"
 	    if ("${env.DEBUG}") { input message: "Proceed with running validation tests?" }
 	    sh './scripts/get_validation-tests.sh'
@@ -233,22 +242,16 @@ try {
 		    "-e DEBUG=\'${DEBUG}\' " +
 		    "rancherlabs/ci-validation-tests deprovision aws"
 		*/
-	  }
 
 	  } else {
 	    echo 'User specified provision-only mode via PIPELINE_PROVISION_ONLY.'
 	    currentBuild.result = 'SUCCESS'
+	    }
 	  }
-	} else {
-	  echo 'User specified deprovision-only mode via PIPELINE_DEPROVISION_ONLY.'
-	  currentBuild.result = 'SUCCESS'
 	}
       }
     }
   }
-
-} catch(err) {
-  currentBuild.result = 'FAILURE'
-}
+} catch(err) { currentBuild.result = 'FAILURE' }
 
 jenkinsSlack('finish')
