@@ -211,7 +211,7 @@ def wait_on_active_agents():
      cmd = "rancher host ls | grep active | wc -l"
 
      # wait for max 20 minutes - that seems pretty extreme but...
-     max_elapsed = 1200
+     max_elapsed = 1800
      step_time = 60
      elapsed = 0
 
