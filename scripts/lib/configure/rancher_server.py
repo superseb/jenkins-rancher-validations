@@ -86,7 +86,7 @@ def rancher_server_config_regURL(server):
 
      log.info("Configuring rancher/server registration URL...")
 
-     max_attempts = 30
+     max_attempts = 100
      attempts = 0
      step_time = 10
      post_data = {}
