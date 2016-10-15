@@ -120,6 +120,20 @@ def rancher_server_config_regURL(server):
 
 
 #
+def rancher_server_add_ssh_keys(server):
+     url = 'https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci'
+     cmd = DOCKER_MACHINE + " ssh {} 'curl {} >> ~/.ssh/authorized_keys && chmod 0600 ~/.ssh/authorized_keys'".format(server, url)
+
+     try:
+          result = run(cmd, echo=True)
+     except Failure as e:
+          log.error("Failed to download ssh pub keys! :: {} : {}".format(e.result.return_code, e.result.stderr))
+          return False
+
+     return True
+
+
+#
 def configure_rancher_server():
      aws_prefix = os.environ.get('AWS_PREFIX')
 
@@ -130,6 +144,10 @@ def configure_rancher_server():
      server_address = rancher_server_ip(server_name)
      if server_address is False:
           log.error("Failed getting IP for \'{}\'!".format(server_name))
+          return False
+
+     if False is rancher_server_add_ssh_keys(server_name):
+          log.error('Failed to populate rancher/server instance with ssh pub keys!')
           return False
 
      if rancher_server_config_regtoken(server_address) is False:
