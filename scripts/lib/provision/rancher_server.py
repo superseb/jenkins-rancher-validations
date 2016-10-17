@@ -78,7 +78,7 @@ def provision_rancher_server():
      aws_security_group = os.environ.get('AWS_SECURITY_GROUP')
      rancher_server_os = os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM')
 
-     machine_name = "{}-validation-tests-server0".format(rancher_server_os)
+     machine_name = "{}-vtest-server0".format(rancher_server_os)
      if aws_prefix:
           machine_name = "{}-".format(aws_prefix) + machine_name
 

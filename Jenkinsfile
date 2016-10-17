@@ -27,8 +27,8 @@ def special_prefix() {
 
 
 def aws_prefix() {
-  new_prefix = rancher_version()
-  new_prefix = special_prefix() + "-${new_prefix}"
+  new_prefix = rancher_version().replace('.', '')
+  if( '' != special_prefix() ) { new_prefix = special_prefix() + "-${new_prefix}" }
   return "${new_prefix}"
 }
 

@@ -43,7 +43,7 @@ def deprovision_rancher_server():
 
      aws_prefix = os.environ.get('AWS_PREFIX')
 
-     machine_name = "{}-validation-tests-server0".format(os.environ['RANCHER_SERVER_OPERATINGSYSTEM'])
+     machine_name = "{}-vtest-server0".format(os.environ['RANCHER_SERVER_OPERATINGSYSTEM'])
      if aws_prefix:
           machine_name = "{}-".format(aws_prefix) + machine_name
 

@@ -127,7 +127,7 @@ def provision_rancher_agents():
      try:
           aws_prefix = os.environ.get('AWS_PREFIX')
 
-          server_name = "{}-validation-tests-server0".format(agent_os)
+          server_name = "{}-vtest-server0".format(agent_os)
           if aws_prefix:
                server_name = "{}-".format(aws_prefix) + server_name
 
@@ -179,7 +179,7 @@ def provision_rancher_agents():
 
                # FIXME: do this in parallel!
                for agent in ['agent0', 'agent1', 'agent2']:
-                    agent_name = "{}-validation-tests-{}".format(agent_os, agent)
+                    agent_name = "{}-vtest-{}".format(agent_os, agent)
                     if aws_prefix:
                          agent_name = "{}-".format(aws_prefix) + agent_name
 
