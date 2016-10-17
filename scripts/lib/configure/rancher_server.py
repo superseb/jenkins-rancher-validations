@@ -122,7 +122,13 @@ def rancher_server_config_regURL(server):
 #
 def rancher_server_add_ssh_keys(server):
      url = 'https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci'
-     cmd = DOCKER_MACHINE + " ssh {} 'curl {} >> ~/.ssh/authorized_keys && chmod 0600 ~/.ssh/authorized_keys'".format(server, url)
+
+     server_os = os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM')
+
+     if 'rancher' in server_os:
+          cmd = DOCKER_MACHINE + " ssh {} 'wget {} -O - >> ~/.ssh/authorized_keys && chmod 0600 ~/.ssh/authorized_keys'".format(server, url)
+     else:
+          cmd = DOCKER_MACHINE + " ssh {} 'curl {} >> ~/.ssh/authorized_keys && chmod 0600 ~/.ssh/authorized_keys'".format(server, url)
 
      try:
           result = run(cmd, echo=True)
