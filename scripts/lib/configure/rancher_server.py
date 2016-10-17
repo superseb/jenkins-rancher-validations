@@ -143,7 +143,7 @@ def rancher_server_add_ssh_keys(server):
 def configure_rancher_server():
      aws_prefix = os.environ.get('AWS_PREFIX')
 
-     server_name = "{}-validation-tests-server0".format(os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM'))
+     server_name = "{}-vtest-server0".format(os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM'))
      if aws_prefix:
           server_name = "{}-".format(aws_prefix) + server_name
 
