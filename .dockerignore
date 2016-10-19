@@ -8,3 +8,4 @@ __pycache*
 .env*
 .\#*
 validation-tests
+*.log
