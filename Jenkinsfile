@@ -28,7 +28,7 @@ try {
       sh "docker run --rm  " +
 	"-v \"\$(pwd)\":/workdir " +
 	"--env-file .env " +
-	"rancherlabs/ci-validation-tests:latest deprovision rancher_agents"
+	"rancherlabs/ci-validation-tests:latest rancher_agents.deprovision"
 
       stage "deprovision rancher/server"
       sh "docker run --rm  " +

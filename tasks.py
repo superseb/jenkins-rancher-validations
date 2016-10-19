@@ -1,6 +1,9 @@
 import os
 from invoke import task, Collection, run, Failure
-from lib.python.utils import log_info, log_success, syntax_check, lint_check, err_and_exit
+
+from lib.python.utils import log_info, log_success, log_error, syntax_check, lint_check, err_and_exit
+from lib.python.utils.RancherAgents import RancherAgents, RancherAgentsError
+from lib.python.utils.RancherServer import RancherServer, RancherServerError
 
 
 @task
@@ -70,35 +73,57 @@ def bootstrap(ctx):
     log_success()
 
 
-@task(bootstrap)
+@task(reset, syntax, lint)
 def ci(ctx):
     """
-    Launch a typical CI run.
+    Task to be called by CI systems.
     """
     pass
 
 
 @task
-def provision(ctx):
+def rancher_agents_deprovision(ctx):
     """
-    Provision resources in the test pipeline.
+    Deprovision Rancher Agent nodes.
     """
-    pass
+    try:
+        RancherAgents().deprovision(missing_ok = True)
+    except RancherAgentsError as e:
+        err_and_exit("Failed to deprovision Rancher Agents! : {}".format(e.message))
+    log_success()
 
 
 @task
-def deprovision(ctx):
+def rancher_server_deprovision(ctx):
     """
-    Deprovision resources in the test pipeline.
+    Deprovision Racher Server node.
     """
-    pass
+    try:
+        RancherServer().deprovision()
+    except RancherServerErorr as e:
+        err_and_exit("Failed to deprovision Rancher Server node! : {}".format(message))
+    log_success()
 
 
 ns = Collection('')
 ns.add_task(reset, 'reset')
 ns.add_task(syntax, 'syntax')
 ns.add_task(lint, 'lint')
-ns.add_task(bootstrap, 'bootstrap')
 ns.add_task(ci, 'ci')
-ns.add_task(provision, 'provision')
-ns.add_task(deprovision, 'deprovision')
+
+#aws = Collection('aws')
+#aws.add_task(aws_provision, 'provision')
+#aws.add_task(aws_validate, 'validate')
+
+#rs = Collection('rancher_server')
+#rs.add_task(rancher_server_provision, 'provision')
+#rs.add_task(rancher_server_deprovision, 'deprovision')
+#rs.add_task(rancher_server_configure, 'configure')
+#rs.add_task(rancher_server_validate, 'validate')
+
+ra = Collection('rancher_agents')
+#ra.add_task(rancher_agents_provision, 'provision')
+ra.add_task(rancher_agents_deprovision, 'deprovision')
+#rs.add_task(rancher_agents_configure, 'configure')
+#ra.add_task(rancher_agents_validate, 'validate')
+ns.add_collection(ra)

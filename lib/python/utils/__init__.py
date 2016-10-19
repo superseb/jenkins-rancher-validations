@@ -18,12 +18,14 @@ def is_debug_enabled():
 log = logging.getLogger(__name__)
 
 if is_debug_enabled():
+    format = '%(asctime)s - %(levelname)s - %(filename)s:%(lineno)s - %(funcName)s - %(message)s'
     log.setLevel(logging.DEBUG)
 else:
     log.setLevel(logging.INFO)
+    format = '%(asctime)s - %(levelname)s - %(message)s'
 
 stream = logging.StreamHandler()
-stream.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+stream.setFormatter(logging.Formatter(format))
 log.addHandler(stream)
 
 
