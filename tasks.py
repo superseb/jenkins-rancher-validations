@@ -1,7 +1,7 @@
 import os
-from invoke import task, Collection
+from invoke import task, Collection, run, Failure
 
-from lib.python.utils import log_info, log_success, syntax_check, lint_check
+from lib.python.utils import log_info, log_success, syntax_check, lint_check, err_and_exit
 
 
 @task
@@ -43,6 +43,27 @@ def lint(ctx):
 
 
 @task
+def bootstrap(ctx):
+    """
+    Build the utility container used to execution of the test pipeline
+    """
+    log_info("Creating the utility container...")
+    try:
+        run("docker build -f rancherlabs/ci-validation-tests -f Dockerfile .", echo=True)
+    except Failure as e:
+        err_and_exit("Failed while building utility container!: {} :: {}".format(e.result.return_code, e.result.stderr))
+    log_success("[OK]")
+
+
+@task(bootstrap, syntax, lint)
+def ci(ctx):
+    """
+    Launch a typical CI run.
+    """
+    pass
+
+    
+@task
 def provision(ctx):
     """
     Provision resources in the test pipeline.
@@ -60,7 +81,9 @@ def deprovision(ctx):
 
 ns = Collection('')
 
+ns.add_task(bootstrap, 'bootstrap')
 ns.add_task(syntax, 'syntax')
 ns.add_task(lint, 'lint')
+ns.add_task(ci, 'ci')
 ns.add_task(provision, 'provision')
 ns.add_task(deprovision, 'deprovision')
