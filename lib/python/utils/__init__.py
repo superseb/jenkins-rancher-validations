@@ -9,7 +9,7 @@ colorama.init()
 
 #
 def is_debug_enabled():
-    if os.environ.get('DEBUG'):
+    if 'DEBUG' in os.environ and 'false' != os.environ.get('DEBUG'):
         return True
     else:
         return False
@@ -49,8 +49,10 @@ def claxon_and_exit(msg):
 
 
 #
-def log_success(msg):
-    print(Back.BLACK + Style.BRIGHT + Fore.GREEN + msg + Fore.RESET + Style.NORMAL)
+def log_success(msg=''):
+    if '' is msg:
+        msg = '[OK]'
+    log.info(Back.BLACK + Style.BRIGHT + Fore.GREEN + msg + Fore.RESET + Style.NORMAL)
 
 
 #

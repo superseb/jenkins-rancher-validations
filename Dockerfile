@@ -3,14 +3,13 @@ MAINTAINER Nathan Valentine <nathan@rancher.com|nrvale0@gmail.com>
 
 ARG OPTDIR=/opt/nrvale0
 ARG BINDIR="${OPTDIR}/bin"
-ARG SCRIPTDIR="${OPTDIR}/scripts"
 ARG BUILDCACHE=/tmp/build
 ARG WORKDIR=/workdir
 
 ENV TERM=ansi DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true
-ENV PATH "${SCRIPTDIR}:${BINDIR}:/opt/puppetlabs/bin:/opt/puppetlabs/puppet/bin:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin"
+ENV PATH "${BINDIR}:/opt/puppetlabs/bin:/opt/puppetlabs/puppet/bin:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin"
 
-RUN mkdir -p "${BUILDCACHE}" "${BINDIR}" "${SCRIPTDIR}" "${WORKDIR}"
+RUN mkdir -p "${BUILDCACHE}" "${BINDIR}" "${WORKDIR}"
 
 # for AWS VPC provisioning
 ARG PUPPET_RELEASE_URI=https://apt.puppetlabs.com/puppetlabs-release-pc1-jessie.deb
@@ -39,11 +38,12 @@ ADD "${DOCKER_MACHINE_URI} ${BINDIR}/docker-machine"
 RUN chmod +x "${BINDIR}/docker-machine"
 
 # the scripts for CMD
-ADD ./lib/python/requirements.txt "${SCRIPTDIR}/requirements.txt"
-RUN (cd ${SCRIPTDIR} && \
-    pip install -r requirements.txt)
-ADD ./lib "${SCRIPTDIR}/"
-ADD tasks.py "${SCRIPTDIR}/"
+ADD ./lib "${WORKDIR}/lib/"
+ADD ./tasks.py "${WORKDIR}"
+
+RUN (cd "${WORKDIR}" && \
+    pip install -r ./lib/python/requirements.txt)
 
 ADD Dockerfile /opt/nrvale0
 WORKDIR "${WORKDIR}"
+ENTRYPOINT ["invoke"]

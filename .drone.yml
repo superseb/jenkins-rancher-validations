@@ -5,4 +5,4 @@ pipeline:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     commands:
-      - dapper invoke ci
+      - dapper ci
