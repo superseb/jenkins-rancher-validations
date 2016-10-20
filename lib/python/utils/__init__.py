@@ -1,8 +1,7 @@
-import os, sys, fnmatch, numpy, colorama, logging, yaml
+import os, sys, fnmatch, numpy, colorama, logging, yaml, inspect
 from colorama import Back, Fore, Style
 from invoke import run, Failure
 from os import walk
-
 
 colorama.init()
 
@@ -15,38 +14,62 @@ def is_debug_enabled():
         return False
 
 
+# Pverride the output of default logging.Formatter to instead use calling function/frame metadata.
+class RewindFormatter(logging.Formatter):
+    def __init__(self):
+        fmt = '%(asctime)s - %(levelname)s - %(caller_filename)s:%(caller_lineno)s - %(caller_funcName)s - %(message)s'
+        super(RewindFormatter, self).__init__(fmt=fmt)
+
+
+# Logging setup.
+# If debug mode is enabled, use customer RewindFormatter (see above).
 log = logging.getLogger(__name__)
+stream = logging.StreamHandler()
 
 if is_debug_enabled():
-    format = '%(asctime)s - %(levelname)s - %(filename)s:%(lineno)s - %(funcName)s - %(message)s'
     log.setLevel(logging.DEBUG)
+    stream.setFormatter(RewindFormatter())
 else:
+    format = '%(asctime)s - %(levelname)s - %(message)s'    
     log.setLevel(logging.INFO)
-    format = '%(asctime)s - %(levelname)s - %(message)s'
-
-stream = logging.StreamHandler()
-stream.setFormatter(logging.Formatter(format))
+    stream.setFormatter(logging.Formatter(format))
+    
 log.addHandler(stream)
 
 
 #
+def get_parent_frame_metadata(frame):
+    parent_frame = inspect.getouterframes(frame, 2)
+    
+    return {
+        'caller_filename': parent_frame[1].filename,
+        'caller_lineno': parent_frame[1].lineno,
+        'caller_funcName': parent_frame[1].function + "()"
+        }
+
+
+#
 def log_info(msg):
-    log.info(Back.BLACK + Fore.WHITE + msg + Fore.RESET)
+    log.info(Back.BLACK + Fore.WHITE + msg + Fore.RESET,
+             extra=get_parent_frame_metadata(inspect.currentframe()))
 
 
 #
 def log_debug(msg):
-    log.debug(Back.BLACK + Fore.BLUE + msg + Fore.RESET)
+    log.debug(Back.BLACK + Fore.BLUE + msg + Fore.RESET,
+              extra=get_parent_frame_metadata(inspect.currentframe()))
 
 
 #
 def log_error(msg):
-    log.error((Back.BLACK + Style.BRIGHT + Fore.RED + msg + os.linesep + Fore.RESET + Style.NORMAL))
+    log.error(Back.BLACK + Style.BRIGHT + Fore.RED + msg + os.linesep + Fore.RESET + Style.NORMAL,
+              extra=get_parent_frame_metadata(inspect.currentframe()))
 
 
 #
 def claxon_and_exit(msg):
-    log.error((Back.RED + Style.BRIGHT + Fore.WHITE + msg + os.linesep + Fore.RESET + Style.NORMAL))
+    log.error(Back.RED + Style.BRIGHT + Fore.WHITE + msg + os.linesep + Fore.RESET + Style.NORMAL,
+              extra=get_parent_frame_metadata(inspect.currentframe()))
     sys.exit(-10)
 
 
@@ -54,7 +77,8 @@ def claxon_and_exit(msg):
 def log_success(msg=''):
     if '' is msg:
         msg = '[OK]'
-    log.info(Back.BLACK + Style.BRIGHT + Fore.GREEN + msg + Fore.RESET + Style.NORMAL)
+    log.info(Back.BLACK + Style.BRIGHT + Fore.GREEN + msg + Fore.RESET + Style.NORMAL,
+             extra=get_parent_frame_metadata(inspect.currentframe()))
 
 
 #
