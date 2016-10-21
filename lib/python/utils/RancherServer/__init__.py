@@ -111,6 +111,7 @@ class RancherServer(object):
                         ami = settings['ami-id']
                         user = settings['ssh_username']
                         docker_version = os.environ.get('DOCKER_VERSION')
+                        rancher_version = os.environ.get('RANCHER_VERSION')
 
                         # Create the node with Docker Machine because it does a good job of settings up the TLS
                         # stuff but we are going to remove the packages and install our specified version over top
@@ -120,6 +121,10 @@ class RancherServer(object):
                         DockerMachine().ssh(self.name(), "DOCKER_VERSION={} /tmp/docker_reinstall.sh".format(
                                 docker_version,
                                 user))
+                        DockerMachine().ssh(
+                                self.name(), "docker run -d --restart=always --name=rancher_server_{} -p 8080:8080 rancher/server:{}".format(
+                                        rancher_version,
+                                        rancher_version))
 
                 except DockerMachineError as e:
                         msg = "Failed to provision \'{}\'!: {}".format(self.name(), e.message)
