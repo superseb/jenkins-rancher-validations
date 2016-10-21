@@ -18,6 +18,20 @@ class DockerMachine(object):
     storage_path = None
 
     #
+    def __validate_envvars(self):
+        required_envvars = ['MACHINE_DOCKER_INSTALL_URL',
+                            'MACHINE_DOCKER_VERSION']
+        result = True
+        missing = []
+        for envvar in required_envvars:
+            if envvar not in os.environ:
+                log_debug("Missing envvar \'{}\'!".format(envvar))
+                missing.append(envvar)
+                result = False
+        if False is result:
+            raise DockerMachineError("The following environment variables are required: {}".format(', '.join(missing)))
+
+    #
     def __cmd(self, op, env={}):
         cmd = ''
         if '' != self.bin_path:
@@ -43,6 +57,7 @@ class DockerMachine(object):
     def __init__(self, bin_path='', storage_path='~/.docker/machine'):
         self.bin_path = bin_path
         self.storage_path = storage_path
+        self.__validate_envvars()
 
     #
     def IP(self, name):
@@ -55,6 +70,9 @@ class DockerMachine(object):
 
     #
     def create(self, name, ami, user):
+        install_script_url = os.environ.get('MACHINE_DOCKER_INSTALL_URL')
+        docker_version = os.environ.get('MACHINE_DOCKER_VERSION')
+        
         try:
             aws_security_group = os.environ.get('AWS_SECURITY_GROUP')
 
@@ -62,6 +80,9 @@ class DockerMachine(object):
                   "--driver amazonec2 " + \
                   "--amazonec2-security-group {} ".format(aws_security_group) + \
                   "--amazonec2-ssh-user {} ".format(user) + \
+                  "--engine-install-url {} ".format(install_script_url) + \
+                  "--engine-env DOCKER_VERSION={} ".format(docker_version) + \
+                  "--engine-env DOCKER_USER={} ".format(user) + \
                   name
 
             self.__cmd(cmd, {'AWS_AMI': ami})

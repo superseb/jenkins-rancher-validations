@@ -20,7 +20,6 @@ class RancherServer(object):
                                     'AWS_SECRET_ACCESS_KEY',
                                     'AWS_DEFAULT_REGION',
                                     'AWS_INSTANCE_TYPE',
-                                    'AWS_AMI',
                                     'AWS_TAGS',
                                     'AWS_VPC_ID',
                                     'AWS_SUBNET_ID',
