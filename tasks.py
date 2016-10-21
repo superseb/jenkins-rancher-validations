@@ -1,6 +1,7 @@
 import os
 from invoke import task, Collection, run, Failure
 
+import lib.python.utils
 from lib.python.utils import log_info, log_success, log_error, syntax_check, lint_check, err_and_exit
 from lib.python.utils.RancherAgents import RancherAgents, RancherAgentsError
 from lib.python.utils.RancherServer import RancherServer, RancherServerError

@@ -40,7 +40,7 @@ class RancherAgents(object):
                                 missing.append(envvar)
                                 result = False
                 if False is result:
-                        raise RancherAgentError("The following environment variables are required: {}".format(', '.join(missing)))
+                        raise RancherAgentsError("The following environment variables are required: {}".format(', '.join(missing)))
 
 
         #
