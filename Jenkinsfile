@@ -16,73 +16,73 @@ try {
 //      sh "docker run --rm  " +
 //	  "-v \"\$(pwd)\":/workdir " +
 //	  "--env-file .env " +
-//	  "rancherlabs/ci-validation-tests:latest syntax"
+//	  "rancherlabs/ci-validation-tests syntax"
 //
 //      stage "lint"
 //      sh "docker run --rm  " +
 //	  "-v \"\$(pwd)\":/workdir " +
 //	  "--env-file .env " +
-//	  "rancherlabs/ci-validation-tests:latest lint"
+//	  "rancherlabs/ci-validation-tests lint"
 
       stage "deprovision Rancher Agents"
       sh "docker run --rm  " +
 	"-v \"\$(pwd)\":/workdir " +
 	"--env-file .env " +
-	"rancherlabs/ci-validation-tests:latest rancher_agents.deprovision"
+	"rancherlabs/ci-validation-tests rancher_agents.deprovision"
 
       stage "deprovision rancher/server"
       sh "docker run --rm  " +
 	"-v \"\$(pwd)\":/workdir " +
 	"--env-file .env " +
-	"rancherlabs/ci-validtion-tests deprovision rancher_server"
+	"rancherlabs/ci-validation-tests rancher_server.deprovision"
 
-      stage "provision AWS"
-      sh "docker run --rm  " +
-	"-v \"\$(pwd)\":/workdir " +
-	"--env-file .env " +
-	"rancherlabs/ci-validtion-tests provision aws"
+//      stage "provision AWS"
+//      sh "docker run --rm  " +
+//	"-v \"\$(pwd)\":/workdir " +
+//	"--env-file .env " +
+//	"rancherlabs/ci-validation-tests provision aws"
 
       stage "provision rancher/server"
       sh "docker run --rm  " +
 	"-v \"\$(pwd)\":/workdir " +
 	"--env-file .env " +
-	"rancherlabs/ci-validation-tests:latest provision rancher_server"
+	"rancherlabs/ci-validation-tests rancher_server.provision"
 	
       stage "configure rancher/server"
       sh "docker run --rm  " +
 	"-v \"\$(pwd)\":/workdir " +
 	"--env-file .env " +
-	"rancherlabs/ci-validtion-tests configure rancher_server"
+	"rancherlabs/ci-validation-tests rancher_server.configure"
 
       stage "provision Rancher Agents"
       sh "docker run --rm  " +
 	"-v \"\$(pwd)\":/workdir " +
 	"--env-file .env " +
-	"rancherlabs/ci-validation-tests:latest provision rancher_agents"
+	"rancherlabs/ci-validation-tests rancher_agents.provision"
 
       stage "configure Rancher Agents"
       sh "docker run --rm  " +
 	"-v \"\$(pwd)\":/workdir " +
 	"--env-file .env " +
-	"rancherlabs/ci-validation-tests:latest configure rancher_agents"
+	"rancherlabs/ci-validation-tests rancher_agents.configure"
 
       stage "run validation tests"
       sh "docker run --rm  " +
 	"-v \"\$(pwd)\":/workdir " +
 	"--env-file .env " +
-	"rancherlabs/ci-validation-tests:latest validation-tests"
+	"rancherlabs/ci-validation-tests validation-tests"
       
       stage "deprovision Rancher Agents"
       sh "docker run --rm  " +
 	"-v \"\$(pwd)\":/workdir " +
 	"--env-file .env " +
-	"rancherlabs/ci-validation-tests:latest deprovision rancher_agents"
+	"rancherlabs/ci-validation-tests deprovision rancher_agents"
       
       stage "deprovision rancher/server"
       sh "docker run --rm  " +
 	"-v \"\$(pwd)\":/workdir " +
 	"--env-file .env " +
-	"rancherlabs/ci-validation-tests:latest deprovision rancher_server"
+	"rancherlabs/ci-validation-tests deprovision rancher_server"
     }
   }
 } catch(err) { currentBuild.result = 'FAILURE' }

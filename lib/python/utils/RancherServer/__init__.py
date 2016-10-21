@@ -26,7 +26,8 @@ class RancherServer(object):
                                     'AWS_SECURITY_GROUP',
                                     'AWS_ZONE',
                                     'RANCHER_SERVER_OPERATINGSYSTEM',
-                                    'RANCHER_VERSION']
+                                    'RANCHER_VERSION',
+                                    'RANCHER_DOCKER_VERSION']
 
                 result = True
                 missing = []
@@ -107,11 +108,11 @@ class RancherServer(object):
         #
         def provision(self):
                 try:
-                        settings = self.__os_to_settings(os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM'))
+                        settings = self.__os_to_settings(os.environ['RANCHER_SERVER_OPERATINGSYSTEM'])
                         ami = settings['ami-id']
                         user = settings['ssh_username']
-                        docker_version = os.environ.get('DOCKER_VERSION')
-                        rancher_version = os.environ.get('RANCHER_VERSION')
+                        docker_version = os.environ['RANCHER_DOCKER_VERSION']
+                        rancher_version = os.environ['RANCHER_VERSION']
 
                         # Create the node with Docker Machine because it does a good job of settings up the TLS
                         # stuff but we are going to remove the packages and install our specified version over top

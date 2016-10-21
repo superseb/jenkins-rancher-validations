@@ -22,7 +22,6 @@ class RancherAgents(object):
                                     'AWS_DEFAULT_REGION',
                                     'AWS_INSTANCE_TYPE',
                                     'AWS_PREFIX',
-                                    'AWS_AMI',
                                     'AWS_TAGS',
                                     'AWS_VPC_ID',
                                     'AWS_SUBNET_ID',

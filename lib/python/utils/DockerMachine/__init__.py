@@ -53,7 +53,7 @@ class DockerMachine(object):
         return result.stdout
 
     #
-    def __init__(self, bin_path='', storage_path='~/.docker/machine'):
+    def __init__(self, bin_path='', storage_path='./.docker/machine'):
         self.bin_path = bin_path
         self.storage_path = storage_path
         self.__validate_envvars()
