@@ -12,17 +12,17 @@ try {
       stage "configure Docker .env file"
       sh "./scripts/configure.sh"
       
-      stage "syntax"
-      sh "docker run --rm  " +
-	"-v \"\$(pwd)\":/workdir " +
-	"--env-file .env " +
-	"rancherlabs/ci-validation-tests:latest syntax"
-
-      stage "lint"
-      sh "docker run --rm  " +
-	"-v \"\$(pwd)\":/workdir " +
-	"--env-file .env " +
-	"rancherlabs/ci-validation-tests:latest lint"
+//      stage "syntax"
+//      sh "docker run --rm  " +
+//	  "-v \"\$(pwd)\":/workdir " +
+//	  "--env-file .env " +
+//	  "rancherlabs/ci-validation-tests:latest syntax"
+//
+//      stage "lint"
+//      sh "docker run --rm  " +
+//	  "-v \"\$(pwd)\":/workdir " +
+//	  "--env-file .env " +
+//	  "rancherlabs/ci-validation-tests:latest lint"
 
       stage "deprovision Rancher Agents"
       sh "docker run --rm  " +
