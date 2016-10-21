@@ -54,49 +54,17 @@ class DockerMachine(object):
             raise DockerMachineError(msg) from e
 
     #
-    def __os_to_settings(self, os):
-
-        if 'ubuntu-1604' in os:
-            ami = 'ami-20be7540'
-            ssh_username = 'ubuntu'
-
-        elif 'ubuntu-1404' in os:
-            ami = 'ami-746aba14'
-            ssh_username = 'ubuntu'
-
-        elif 'centos7' in os:
-            ami = 'ami-d2c924b2'
-            ssh_username = 'centos'
-
-        elif 'rancheros' in os:
-            ami = 'ami-1ed3007e'
-            ssh_username = 'rancher'
-
-        elif 'coreos' in os:
-            ami = 'ami-06af7f66'
-            ssh_username = 'core'
-
-        else:
-            raise DockerMachineError("Unsupported OS specified \'{}\'!".format(os))
-
-        return {'ami-id': ami, 'ssh_username': ssh_username}
-
-    #
-    def create(self, name):
+    def create(self, name, ami, user):
         try:
-            server_os = os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM')
-            settings = self.__os_to_settings(server_os)
-            ami_id = settings['ami-id']
-            ssh_username = settings['ssh_username']
             aws_security_group = os.environ.get('AWS_SECURITY_GROUP')
 
             cmd = "create " + \
                   "--driver amazonec2 " + \
                   "--amazonec2-security-group {} ".format(aws_security_group) + \
-                  "--amazonec2-ssh-user {} ".format(ssh_username) + \
+                  "--amazonec2-ssh-user {} ".format(user) + \
                   name
 
-            self.__cmd(cmd, {'AWS_AMI': ami_id})
+            self.__cmd(cmd, {'AWS_AMI': ami})
         except DockerMachineError as e:
             msg = "Failed to create \'{}\'! : {}".format(name, e.message)
             log_debug(msg)
@@ -109,6 +77,16 @@ class DockerMachine(object):
             self.__cmd("rm -y {}".format(name))
         except DockerMachineError as e:
             msg = "Failed to deprovision \'{}\'! : {}".format(name, e.message)
+            log_debug(msg)
+            raise DockerMachineError(msg) from e
+        return True
+
+    #
+    def ssh(self, name, cmd):
+        try:
+            self.__cmd("ssh {} {}".format(name, cmd))
+        except DockerMachineError as e:
+            msg = "Failed ssh'ing to machine \'{}\'! : {}".format(name, e.message)
             log_debug(msg)
             raise DockerMachineError(msg) from e
         return True

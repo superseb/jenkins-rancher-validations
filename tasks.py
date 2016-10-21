@@ -96,7 +96,7 @@ def rancher_agents_deprovision(ctx):
 @task
 def rancher_server_deprovision(ctx):
     """
-    Deprovision Racher Server node.
+    Deprovision Rancher Server node.
     """
     try:
         RancherServer().deprovision(missing_ok=True)
@@ -108,12 +108,36 @@ def rancher_server_deprovision(ctx):
 @task
 def rancher_server_provision(ctx):
     """
-    Deprovision Racher Server node.
+    Provision Rancher Server node.
     """
     try:
         RancherServer().provision()
     except RancherServerError as e:
         err_and_exit("Failed to provision Rancher Server node! : {}".format(e.message))
+    log_success()
+
+
+@task
+def rancher_server_configure(ctx):
+    """
+    Configure Rancher Server node.
+    """
+    try:
+        RancherServer().configure()
+    except RancherServerError as e:
+        err_and_exit("Failed to configure Rancher Server node! : {}".format(e.message))
+    log_success()
+
+
+@task
+def rancher_agents_provision(ctx):
+    """
+    Provision Rancher Agent nodes.
+    """
+    try:
+        RancherAgents().provision()
+    except RancherAgentsError as e:
+        err_and_exit("Failed to provision Rancher Agent nodes! : {}".format(e.message))
     log_success()
 
 
@@ -130,13 +154,13 @@ ns.add_task(ci, 'ci')
 rs = Collection('rancher_server')
 rs.add_task(rancher_server_provision, 'provision')
 rs.add_task(rancher_server_deprovision, 'deprovision')
-# rs.add_task(rancher_server_configure, 'configure')
+rs.add_task(rancher_server_configure, 'configure')
 # rs.add_task(rancher_server_validate, 'validate')
 ns.add_collection(rs)
 
 ra = Collection('rancher_agents')
 # ra.add_task(rancher_agents_provision, 'provision')
 ra.add_task(rancher_agents_deprovision, 'deprovision')
-# rs.add_task(rancher_agents_configure, 'configure')
+# ra.add_task(rancher_agents_configure, 'configure')
 # ra.add_task(rancher_agents_validate, 'validate')
 ns.add_collection(ra)

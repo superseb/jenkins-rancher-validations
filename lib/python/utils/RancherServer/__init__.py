@@ -1,6 +1,6 @@
 import os
 
-from .. import log_debug, log_info
+from .. import log_debug, log_info, err_and_exit
 from ..DockerMachine import DockerMachine, DockerMachineError
 
 
@@ -78,10 +78,81 @@ class RancherServer(object):
                 return True
 
         #
+        def __os_to_settings(self, os):
+
+                if 'ubuntu-1604' in os:
+                        ami = 'ami-20be7540'
+                        ssh_username = 'ubuntu'
+
+                elif 'ubuntu-1404' in os:
+                        ami = 'ami-746aba14'
+                        ssh_username = 'ubuntu'
+
+                elif 'centos7' in os:
+                        ami = 'ami-d2c924b2'
+                        ssh_username = 'centos'
+
+                elif 'rancheros' in os:
+                        ami = 'ami-1ed3007e'
+                        ssh_username = 'rancher'
+
+                elif 'coreos' in os:
+                        ami = 'ami-06af7f66'
+                        ssh_username = 'core'
+
+                else:
+                        raise RancherServerError("Unsupported OS specified \'{}\'!".format(os))
+
+                return {'ami-id': ami, 'ssh_username': ssh_username}
+
+        #
         def provision(self):
                 try:
-                        return DockerMachine().create(self.name())
+                        settings = self.__os_to_settings(os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM'))
+                        ami = settings['ami-id']
+                        user = settings['ssh_username']
+
+                        return DockerMachine().create(self.name(), ami, user)
                 except DockerMachineError as e:
                         msg = "Failed to provision \'{}\'!: {}".format(self.name(), e.message)
                         log_debug(msg)
                         raise RancherServerError(msg) from e
+
+        #
+        def __add_ssh_keys(self):
+                try:
+                        ssh_key_url = "https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci"
+                        server_os = os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM')
+                        settings = self.__os_to_settings(server_os)
+                        ssh_username = settings['ssh_username']
+                        ssh_auth = "~/.ssh/authorized_keys"
+
+                        cmd = "'wget {} -O - >> {} && chmod 0600 {}'".format(ssh_key_url, ssh_auth, ssh_auth)
+                        DockerMachine().ssh(self.name(), cmd)
+
+                except DockerMachineError as e:
+                        msg = "Failed while adding ssh keys! : {}".format(e.message)
+                        log_debug(msg)
+                        raise RancherServerError(msg) from e
+
+                return True
+
+        #
+        def __set_reg_token(self):
+                err_and_exit('Not yet implemented!')
+
+        #
+        def __set_reg_url(self):
+                err_and_exit('Not yet implemented!')
+
+        #
+        def configure(self):
+                try:
+                        self.__add_ssh_keys()
+                        self.__set_reg_token()
+                        self.__set_reg_url()
+
+                except RancherServerError as e:
+                        msg = "Failed while configuring Rancher server \'{}\'!: {}".format(self.__name(), e.message)
+                        log_debug(msg)
+                        raise RancherServer(msg) from e

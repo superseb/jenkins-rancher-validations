@@ -40,6 +40,29 @@ log.addHandler(stream)
 
 
 #
+def run_with_retries(cmd, echo=False, sleep=10, attempts=10):
+    current_attempts = 0
+    result = None
+
+    while current_attempts <= attempts:
+        current_attempts += 1
+        try:
+            result = run(cmd, echo=echo)
+            break
+        except Failure as e:
+            if current_attempts < attempts:
+                msg = "Attempt {}/{} of {} failed. Sleeping for {}...".format(current_attempts, attempts, cmd)
+                log_info(msg)
+                sleep(sleep)
+            else:
+                msg = "Exceeded max attempts {} for {}!".format(attempts, cmd)
+                log_debug(msg)
+                raise Failure(msg) from e
+
+    return result
+
+
+#
 def get_parent_frame_metadata(frame):
     parent_frame = inspect.getouterframes(frame, 2)
 
