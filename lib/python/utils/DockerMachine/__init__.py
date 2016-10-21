@@ -19,8 +19,7 @@ class DockerMachine(object):
 
     #
     def __validate_envvars(self):
-        required_envvars = ['MACHINE_DOCKER_INSTALL_URL',
-                            'MACHINE_DOCKER_VERSION']
+        required_envvars = []
         result = True
         missing = []
         for envvar in required_envvars:
@@ -70,19 +69,15 @@ class DockerMachine(object):
 
     #
     def create(self, name, ami, user):
-        install_script_url = os.environ.get('MACHINE_DOCKER_INSTALL_URL')
-        docker_version = os.environ.get('MACHINE_DOCKER_VERSION')
-        
         try:
             aws_security_group = os.environ.get('AWS_SECURITY_GROUP')
 
+            # create via Docker Machine because it does all the hard work of
+            # creating TLS certs + keys
             cmd = "create " + \
                   "--driver amazonec2 " + \
                   "--amazonec2-security-group {} ".format(aws_security_group) + \
                   "--amazonec2-ssh-user {} ".format(user) + \
-                  "--engine-install-url {} ".format(install_script_url) + \
-                  "--engine-env DOCKER_VERSION={} ".format(docker_version) + \
-                  "--engine-env DOCKER_USER={} ".format(user) + \
                   name
 
             self.__cmd(cmd, {'AWS_AMI': ami})
@@ -108,6 +103,16 @@ class DockerMachine(object):
             self.__cmd("ssh {} {}".format(name, cmd))
         except DockerMachineError as e:
             msg = "Failed ssh'ing to machine \'{}\'! : {}".format(name, e.message)
+            log_debug(msg)
+            raise DockerMachineError(msg) from e
+        return True
+
+    #
+    def scp(self, name, target, dest):
+        try:
+            self.__cmd("scp {} {}:{}".format(target, name, dest))
+        except DockerMachineError as e:
+            msg = "Failed scp'ing to machine \'{}\'! : {}".format(name, e.message)
             log_debug(msg)
             raise DockerMachineError(msg) from e
         return True

@@ -110,12 +110,23 @@ class RancherServer(object):
                         settings = self.__os_to_settings(os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM'))
                         ami = settings['ami-id']
                         user = settings['ssh_username']
+                        docker_version = os.environ.get('DOCKER_VERSION')
 
-                        return DockerMachine().create(self.name(), ami, user)
+                        # Create the node with Docker Machine because it does a good job of settings up the TLS
+                        # stuff but we are going to remove the packages and install our specified version over top
+                        # of the old /etc/docker.
+                        DockerMachine().create(self.name(), ami, user)
+                        DockerMachine().scp(self.name(), './lib/bash/docker_reinstall.sh', '/tmp/')
+                        DockerMachine().ssh(self.name(), "DOCKER_VERSION={} /tmp/docker_reinstall.sh".format(
+                                docker_version,
+                                user))
+
                 except DockerMachineError as e:
                         msg = "Failed to provision \'{}\'!: {}".format(self.name(), e.message)
                         log_debug(msg)
                         raise RancherServerError(msg) from e
+
+                return True
 
         #
         def __add_ssh_keys(self):
@@ -155,3 +166,5 @@ class RancherServer(object):
                         msg = "Failed while configuring Rancher server \'{}\'!: {}".format(self.__name(), e.message)
                         log_debug(msg)
                         raise RancherServer(msg) from e
+
+                return True

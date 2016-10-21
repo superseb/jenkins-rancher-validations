@@ -3,7 +3,7 @@
 
 Vagrant.configure(2) do |config|
 
-  config.vm.provision "shell", path: "../bash/docker_install.sh"
+  config.vm.provision "shell", path: "../bash/docker_reinstall.sh"
 
   config.vm.define :centos7 do |c|
     c.vm.box = "centos/7"
