@@ -1,4 +1,4 @@
-import os, sys, fnmatch, numpy, plumbum, logging, yaml, inspect
+import os, sys, fnmatch, numpy, logging, yaml, inspect
 
 from plumbum import colors
 from invoke import run, Failure
@@ -13,12 +13,14 @@ def is_debug_enabled():
         return False
 
 
-# Pverride the output of default logging.Formatter to instead use calling function/frame metadata.
-class RewindFormatter(logging.Formatter):
+# Override the output of default logging.Formatter to instead use calling function/frame metadata
+# and do other fancy stuff.
+class FancyFormatter(logging.Formatter):
     def __init__(self):
         fmt = colors.dim | \
-              '%(asctime)s - %(levelname)s - %(caller_filename)s:%(caller_lineno)s - %(caller_funcName)s - %(message)s'
-        super(RewindFormatter, self).__init__(fmt=fmt)
+              '%(asctime)s - %(levelname)s - %(caller_filename)s:%(caller_lineno)s - %(caller_funcName)s - %(message)s' | \
+              colors.fg.reset
+        super(FancyFormatter, self).__init__(fmt=fmt)
 
 
 # Logging setup.
@@ -28,29 +30,29 @@ stream = logging.StreamHandler()
 
 if is_debug_enabled():
     log.setLevel(logging.DEBUG)
-    stream.setFormatter(RewindFormatter())
+    stream.setFormatter(FancyFormatter())
 else:
-    format = '%(asctime)s - %(levelname)s - %(message)s'    
+    format = '%(asctime)s - %(levelname)s - %(message)s'
     log.setLevel(logging.INFO)
     stream.setFormatter(logging.Formatter(format))
-    
+
 log.addHandler(stream)
 
 
 #
 def get_parent_frame_metadata(frame):
     parent_frame = inspect.getouterframes(frame, 2)
-    
+
     return {
         'caller_filename': parent_frame[1].filename,
         'caller_lineno': parent_frame[1].lineno,
         'caller_funcName': parent_frame[1].function + "()"
-        }
+    }
 
 
 #
 def log_info(msg):
-    log.info(colors.fg.white & colors.bold | msg,
+    log.info(colors.fg.white | msg,
              extra=get_parent_frame_metadata(inspect.currentframe()))
 
 
@@ -161,8 +163,8 @@ def lint_check(rootdir, filetypes=[], excludes=[]):
                 # figure out which command we need to run to do a lint check
                 cmd = ''
                 if '*.py' == filetype:
-                    cmd = "flake8 --count --statistics --show-source --max-line-length=160 --ignore={} {}".format(
-                        'E111,E114,E401,E402,E266,F841',
+                    cmd = "flake8 --statistics --show-source --max-line-length=160 --ignore={} {}".format(
+                        'E111,E114,E401,E402,E266,F841,E126',
                         ' '.join(found_files))
 
                 elif '*.pp' == filetype:
