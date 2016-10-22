@@ -1,6 +1,6 @@
 import os
 
-from .. import log_debug, log_info, err_and_exit
+from .. import log_debug, log_info, request_with_retries
 from ..DockerMachine import DockerMachine, DockerMachineError
 
 
@@ -136,6 +136,7 @@ class RancherServer(object):
 
         #
         def __add_ssh_keys(self):
+                log_info("Populating {} with Rancher Labs ssh keys...")
                 try:
                         ssh_key_url = "https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci"
                         server_os = os.environ.get('RANCHER_SERVER_OPERATINGSYSTEM')
@@ -155,11 +156,35 @@ class RancherServer(object):
 
         #
         def __set_reg_token(self):
-                err_and_exit('Not yet implemented!')
+                log_info("Setting the initial agent reg token...")
+                reg_url = "http://{}:8080/v2-beta/projects/1a5/registrationtokens".format(DockerMachine.IP(self.name()))
+                try:
+                        request_with_retries('POST', reg_url, step=20, attempts=20)
+                except RancherServerError as e:
+                        msg = "Failed creating initial agent registration token! : {}".format(e.message)
+                        log_debug(msg)
+                        raise RancherServerError(msg) from e
+                return True
 
         #
         def __set_reg_url(self):
-                err_and_exit('Not yet implemented!')
+                reg_url = "http://{}:8080/v2-beta/settings/api.host".format(DockerMachine.IP(self.name()))
+                try:
+                        request_data = {
+                                "type": "activeSetting",
+                                "name": "api.host",
+                                "activeValue": "",
+                                "inDb": False,
+                                "source": "",
+                                "value": "http://{}:8080".format(DockerMachine.IP(self.name()))
+                        }
+
+                        request_with_retries('PUT', reg_url, request_data, step=20, attempts=100)
+
+                except RancherServerError as e:
+                        msg = "Failed setting the agent registration URL! : {}".format(e.message)
+                        log_debug(msg)
+                        raise RancherServerError(msg) from e
 
         #
         def configure(self):

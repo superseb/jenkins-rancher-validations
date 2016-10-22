@@ -1,8 +1,10 @@
-import os, sys, fnmatch, numpy, logging, yaml, inspect
+import os, sys, fnmatch, numpy, logging, yaml, inspect, requests
 
 from plumbum import colors
 from invoke import run, Failure
 from os import walk
+from requests import ConnectionError, HTTPError
+from time import sleep
 
 
 #
@@ -60,6 +62,38 @@ def run_with_retries(cmd, echo=False, sleep=10, attempts=10):
                 raise Failure(msg) from e
 
     return result
+
+
+#
+def request_with_retries(method, url, data={}, step=10, attempts=10):
+
+    timeout = 5
+    response = None
+    current_attempts = 0
+
+    log_info("Sending request \'{}\' \'{}\' with data \'{}\'...".format(method, url, data))
+
+    try:
+        current_attempts += 1
+        if 'PUT' == method:
+            response = requests.put(url, data, timeout=timeout)
+        if 'GET' == method:
+            response = requests.get(url, timeout=timeout)
+        if 'POST' == method:
+            response = requests.post(url, timeout=timeout)
+        else:
+            log_error("Unsupported method \'{}\' specified!")
+            return False
+
+    except (ConnectionError, HTTPError) as e:
+        if current_attempts >= attempts:
+            log_debug("Exceeded max attempts!: {}".format(e.message))
+            raise e
+        else:
+            log_debug("Request did not succeeed. Sleeping and trying again...")
+            sleep(step)
+
+    return True
 
 
 #

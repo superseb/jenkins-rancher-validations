@@ -61,7 +61,7 @@ class DockerMachine(object):
     #
     def IP(self, name):
         try:
-            return self.__cmd("ip {}".format(name))
+            return (self.__cmd("ip {}".format(name))).rstrip()
         except DockerMachineError as e:
             msg = "Failed in attempt to resolve IP for \'{}\'! : {}".format(name, e.message)
             log_debug(msg)

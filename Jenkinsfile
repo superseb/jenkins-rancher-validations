@@ -54,35 +54,35 @@ try {
 	"--env-file .env " +
 	"rancherlabs/ci-validation-tests rancher_server.configure"
 
-      stage "provision Rancher Agents"
-      sh "docker run --rm  " +
-	"-v \"\$(pwd)\":/workdir " +
-	"--env-file .env " +
-	"rancherlabs/ci-validation-tests rancher_agents.provision"
+      // stage "provision Rancher Agents"
+      // sh "docker run --rm  " +
+      // 	"-v \"\$(pwd)\":/workdir " +
+      // 	"--env-file .env " +
+      // 	"rancherlabs/ci-validation-tests rancher_agents.provision"
 
-      stage "configure Rancher Agents"
-      sh "docker run --rm  " +
-	"-v \"\$(pwd)\":/workdir " +
-	"--env-file .env " +
-	"rancherlabs/ci-validation-tests rancher_agents.configure"
+      // stage "configure Rancher Agents"
+      // sh "docker run --rm  " +
+      // 	"-v \"\$(pwd)\":/workdir " +
+      // 	"--env-file .env " +
+      // 	"rancherlabs/ci-validation-tests rancher_agents.configure"
 
-      stage "run validation tests"
-      sh "docker run --rm  " +
-	"-v \"\$(pwd)\":/workdir " +
-	"--env-file .env " +
-	"rancherlabs/ci-validation-tests validation-tests"
+      // stage "run validation tests"
+      // sh "docker run --rm  " +
+      // 	"-v \"\$(pwd)\":/workdir " +
+      // 	"--env-file .env " +
+      // 	"rancherlabs/ci-validation-tests validation-tests"
       
-      stage "deprovision Rancher Agents"
-      sh "docker run --rm  " +
-	"-v \"\$(pwd)\":/workdir " +
-	"--env-file .env " +
-	"rancherlabs/ci-validation-tests deprovision rancher_agents"
+      // stage "deprovision Rancher Agents"
+      // sh "docker run --rm  " +
+      // 	"-v \"\$(pwd)\":/workdir " +
+      // 	"--env-file .env " +
+      // 	"rancherlabs/ci-validation-tests deprovision rancher_agents"
       
-      stage "deprovision rancher/server"
-      sh "docker run --rm  " +
-	"-v \"\$(pwd)\":/workdir " +
-	"--env-file .env " +
-	"rancherlabs/ci-validation-tests deprovision rancher_server"
+      // stage "deprovision rancher/server"
+      // sh "docker run --rm  " +
+      // 	"-v \"\$(pwd)\":/workdir " +
+      // 	"--env-file .env " +
+      // 	"rancherlabs/ci-validation-tests deprovision rancher_server"
     }
   }
 } catch(err) { currentBuild.result = 'FAILURE' }
