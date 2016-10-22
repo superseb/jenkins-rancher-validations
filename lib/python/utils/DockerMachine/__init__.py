@@ -31,7 +31,7 @@ class DockerMachine(object):
             raise DockerMachineError("The following environment variables are required: {}".format(', '.join(missing)))
 
     #
-    def __cmd(self, op, env={}):
+    def __cmd(self, op, env={}, echo=True, hide=None):
         cmd = ''
         if '' != self.bin_path:
             cmd = "{}".format(self.bin_path)
@@ -43,10 +43,10 @@ class DockerMachine(object):
 
         try:
             log_debug("Running docker-machine cmd \'{}\'...".format(cmd))
-            result = run(cmd, echo=True)
+            result = run(cmd, echo=echo, hide=hide)
 
         except Failure as e:
-            message = "docker-machine command failed! : {} :: {}".format(e.result.return_code, e.result.stderr).rstrip()
+            message = "docker-machine command failed! : {} :: {}".format(e.result.return_code, e.result.stderr)
             log_debug(message)
             raise DockerMachineError(message) from e
 
@@ -61,7 +61,7 @@ class DockerMachine(object):
     #
     def IP(self, name):
         try:
-            return (self.__cmd("ip {}".format(name))).rstrip()
+            return (self.__cmd("ip {}".format(name), echo=False, hide='both')).rstrip()
         except DockerMachineError as e:
             msg = "Failed in attempt to resolve IP for \'{}\'! : {}".format(name, e.message)
             log_debug(msg)

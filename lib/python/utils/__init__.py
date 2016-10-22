@@ -77,12 +77,12 @@ def request_with_retries(method, url, data={}, step=10, attempts=10):
         current_attempts += 1
         if 'PUT' == method:
             response = requests.put(url, data, timeout=timeout)
-        if 'GET' == method:
+        elif 'GET' == method:
             response = requests.get(url, timeout=timeout)
-        if 'POST' == method:
+        elif 'POST' == method:
             response = requests.post(url, timeout=timeout)
         else:
-            log_error("Unsupported method \'{}\' specified!")
+            log_error("Unsupported method \'{}\' specified!".format(method))
             return False
 
     except (ConnectionError, HTTPError) as e:
@@ -145,6 +145,35 @@ def err_and_exit(msg):
     log.error(colors.fg.red & colors.bold | msg,
               extra=get_parent_frame_metadata(inspect.currentframe()))
     sys.exit(-1)
+
+
+# Given the OS, return a dictionary of OS-specific setting values
+# FIXME: Have this reference a config file for easy addtl platform support.
+def os_to_settings(os):
+    if 'ubuntu-1604' in os:
+        ami = 'ami-20be7540'
+        ssh_username = 'ubuntu'
+
+    elif 'ubuntu-1404' in os:
+        ami = 'ami-746aba14'
+        ssh_username = 'ubuntu'
+
+    elif 'centos7' in os:
+        ami = 'ami-d2c924b2'
+        ssh_username = 'centos'
+
+    elif 'rancheros' in os:
+        ami = 'ami-1ed3007e'
+        ssh_username = 'rancher'
+
+    elif 'coreos' in os:
+        ami = 'ami-06af7f66'
+        ssh_username = 'core'
+
+    else:
+        raise RuntimeError("Unsupported OS specified \'{}\'!".format(os))
+
+    return {'ami-id': ami, 'ssh_username': ssh_username}
 
 
 #

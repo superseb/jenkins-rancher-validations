@@ -24,7 +24,7 @@ RUN dpkg -i ${BUILDCACHE}/puppetlabs*.deb && \
 ADD ./lib/puppet/Puppetfile /etc/puppetlabs/code/
 
 # for various operations against Rancher API
-ARG RANCHER_CLI_URI=https://github.com/rancher/cli/releases/download/v0.2.0-rc1/rancher-linux-amd64-v0.2.0-rc1.tar.gz
+ARG RANCHER_CLI_URI=https://github.com/rancher/cli/releases/download/v0.2.0/rancher-linux-amd64-v0.2.0.tar.gz
 ADD "${RANCHER_CLI_URI} ${BUILDCACHE}/"
 RUN (cd "${BUILDCACHE}" && \
       tar zxvf rancher-* && \

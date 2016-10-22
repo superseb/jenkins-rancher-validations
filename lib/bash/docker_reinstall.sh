@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -uex
+set -ue
 
 DOCKER_VERSION="${DOCKER_VERSION:-latest}"
 DOCKER_USER="${DOCKER_USER:-$(whoami)}"

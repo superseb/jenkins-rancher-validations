@@ -2,7 +2,7 @@
 
 try {
   node {
-    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 1, 'defaultBg': 2]) {
+    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
 
       checkout scm
 
@@ -54,17 +54,11 @@ try {
 	"--env-file .env " +
 	"rancherlabs/ci-validation-tests rancher_server.configure"
 
-      // stage "provision Rancher Agents"
-      // sh "docker run --rm  " +
-      // 	"-v \"\$(pwd)\":/workdir " +
-      // 	"--env-file .env " +
-      // 	"rancherlabs/ci-validation-tests rancher_agents.provision"
-
-      // stage "configure Rancher Agents"
-      // sh "docker run --rm  " +
-      // 	"-v \"\$(pwd)\":/workdir " +
-      // 	"--env-file .env " +
-      // 	"rancherlabs/ci-validation-tests rancher_agents.configure"
+      stage "provision Rancher Agents"
+      sh "docker run --rm  " +
+       	"-v \"\$(pwd)\":/workdir " +
+       	"--env-file .env " +
+       	"rancherlabs/ci-validation-tests rancher_agents.provision"
 
       // stage "run validation tests"
       // sh "docker run --rm  " +
@@ -72,17 +66,17 @@ try {
       // 	"--env-file .env " +
       // 	"rancherlabs/ci-validation-tests validation-tests"
       
-      // stage "deprovision Rancher Agents"
-      // sh "docker run --rm  " +
-      // 	"-v \"\$(pwd)\":/workdir " +
-      // 	"--env-file .env " +
-      // 	"rancherlabs/ci-validation-tests deprovision rancher_agents"
+      stage "deprovision Rancher Agents"
+      sh "docker run --rm  " +
+      	"-v \"\$(pwd)\":/workdir " +
+      	"--env-file .env " +
+      	"rancherlabs/ci-validation-tests deprovision rancher_agents"
       
-      // stage "deprovision rancher/server"
-      // sh "docker run --rm  " +
-      // 	"-v \"\$(pwd)\":/workdir " +
-      // 	"--env-file .env " +
-      // 	"rancherlabs/ci-validation-tests deprovision rancher_server"
+      stage "deprovision rancher/server"
+      sh "docker run --rm  " +
+      	"-v \"\$(pwd)\":/workdir " +
+      	"--env-file .env " +
+      	"rancherlabs/ci-validation-tests deprovision rancher_server"
     }
   }
 } catch(err) { currentBuild.result = 'FAILURE' }
