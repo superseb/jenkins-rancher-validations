@@ -9,38 +9,38 @@ try {
       stage "bootstrap"
       sh "./scripts/bootstrap.sh"
 
-      stage "configure Docker .env file"
+      stage "configure .env file"
       sh "./scripts/configure.sh"
       
-//      stage "syntax"
-//      sh "docker run --rm  " +
-//	  "-v \"\$(pwd)\":/workdir " +
-//	  "--env-file .env " +
-//	  "rancherlabs/ci-validation-tests syntax"
-//
-//      stage "lint"
-//      sh "docker run --rm  " +
-//	  "-v \"\$(pwd)\":/workdir " +
-//	  "--env-file .env " +
-//	  "rancherlabs/ci-validation-tests lint"
+      stage "syntax"
+      sh "docker run --rm  " +
+	  "-v \"\$(pwd)\":/workdir " +
+	  "--env-file .env " +
+	  "rancherlabs/ci-validation-tests syntax"
+
+      stage "lint"
+      sh "docker run --rm  " +
+	"-v \"\$(pwd)\":/workdir " +
+	"--env-file .env " +
+	"rancherlabs/ci-validation-tests lint"
 
       stage "deprovision Rancher Agents"
       sh "docker run --rm  " +
 	"-v \"\$(pwd)\":/workdir " +
 	"--env-file .env " +
 	"rancherlabs/ci-validation-tests rancher_agents.deprovision"
-
+	
       stage "deprovision rancher/server"
+      sh "docker run --rm  " +
+       "-v \"\$(pwd)\":/workdir " +
+	"--env-file .env " +
+	"rancherlabs/ci-validation-tests rancher_server.deprovision"
+	
+      stage "provision AWS"
       sh "docker run --rm  " +
 	"-v \"\$(pwd)\":/workdir " +
 	"--env-file .env " +
-	"rancherlabs/ci-validation-tests rancher_server.deprovision"
-
-//      stage "provision AWS"
-//      sh "docker run --rm  " +
-//	"-v \"\$(pwd)\":/workdir " +
-//	"--env-file .env " +
-//	"rancherlabs/ci-validation-tests provision aws"
+	"rancherlabs/ci-validation-tests aws.provision"
 
       stage "provision rancher/server"
       sh "docker run --rm  " +
@@ -70,13 +70,13 @@ try {
       sh "docker run --rm  " +
       	"-v \"\$(pwd)\":/workdir " +
       	"--env-file .env " +
-      	"rancherlabs/ci-validation-tests deprovision rancher_agents"
+      	"rancherlabs/ci-validation-tests rancher_agents.deprovision"
       
       stage "deprovision rancher/server"
       sh "docker run --rm  " +
       	"-v \"\$(pwd)\":/workdir " +
       	"--env-file .env " +
-      	"rancherlabs/ci-validation-tests deprovision rancher_server"
+      	"rancherlabs/ci-validation-tests rancher_server.deprovision"
     }
   }
 } catch(err) { currentBuild.result = 'FAILURE' }

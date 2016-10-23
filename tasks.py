@@ -4,6 +4,7 @@ from invoke import task, Collection, run, Failure
 from lib.python.utils import log_info, log_success, syntax_check, lint_check, err_and_exit
 from lib.python.utils.RancherAgents import RancherAgents, RancherAgentsError
 from lib.python.utils.RancherServer import RancherServer, RancherServerError
+from lib.python.utils.AWS import AWS, AWSError
 
 
 @task
@@ -141,15 +142,28 @@ def rancher_agents_provision(ctx):
     log_success()
 
 
+@task
+def aws_provision(ctx):
+    """
+    Provision AWS.
+    """
+    try:
+        AWS().provision()
+    except AWSError as e:
+        err_and_exit("Failed to provision AWS! : {}".format(e.message))
+    log_success()
+
+
 ns = Collection('')
 ns.add_task(reset, 'reset')
 ns.add_task(syntax, 'syntax')
 ns.add_task(lint, 'lint')
 ns.add_task(ci, 'ci')
 
-# aws = Collection('aws')
-# aws.add_task(aws_provision, 'provision')
+aws = Collection('aws')
+aws.add_task(aws_provision, 'provision')
 # aws.add_task(aws_validate, 'validate')
+ns.add_collection(aws)
 
 rs = Collection('rancher_server')
 rs.add_task(rancher_server_provision, 'provision')

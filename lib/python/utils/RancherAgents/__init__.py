@@ -96,16 +96,16 @@ class RancherAgents(object):
                 agents = self.__get_agent_names(count)
                 log_info("Creating {} Rancher Agent nodes via Rancher CLI...".format(count))
 
-                cmd = "rancher -wait host create --driver amazonec2 "
+                cmd = "rancher host create --driver amazonec2 "
 
                 # Have to do some envvar translation between Rancher CLI and Docker Machine...
                 log_debug('Performing envvar translation from AWS to Docker Machine...')
-                
+
                 aws_params = {k: v for k, v in os.environ.items() if k.startswith('AWS')}
                 for k, v in aws_params.items():
                         newk = k.replace('AWS_', 'AMAZONEC2_')
                         os.environ[newk] = v.rstrip(os.linesep)
-                
+
                 # cover the cases where direct translation of names is not consistent
                 os.environ['AMAZONEC2_ACCESS_KEY'] = os.environ['AWS_ACCESS_KEY_ID']
                 os.environ['AMAZONEC2_SECRET_KEY'] = os.environ.get('AWS_SECRET_ACCESS_KEY')
@@ -128,12 +128,12 @@ class RancherAgents(object):
                 try:
                         for agent in agents:
                                 ccmd = cmd + agent
-                        
+
                                 log_debug("Creating agent \'{}\' via Rancher CLI...".format(agent))
                                 run(ccmd, echo=True)
 
 #                        self.__add_ssh_keys()
-                        
+
                 except Failure as e:
                         msg = "Failed while provisioning agent!: {} :: {}".format(e.result.return_code, e.result.stderr)
                         log_debug(msg)

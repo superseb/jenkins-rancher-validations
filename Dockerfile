@@ -7,7 +7,7 @@ ARG BUILDCACHE=/tmp/build
 ARG WORKDIR=/workdir
 
 ENV TERM=ansi DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true
-ENV PATH "${BINDIR}:/opt/puppetlabs/bin:/opt/puppetlabs/puppet/bin:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin"
+ENV PATH "${BINDIR}:/opt/puppetlabs/bin:/opt/puppetlabs/puppet/bin:/usr/local/bin:/bin:/sbin:/usr/bin:/usr/sbin"
 
 RUN mkdir -p "${BUILDCACHE}" "${BINDIR}" "${WORKDIR}"
 

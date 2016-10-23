@@ -7,6 +7,11 @@ from requests import ConnectionError, HTTPError
 from time import sleep
 
 
+# This might be bad...assuming that wherever this is running its always going to be
+# TERM=ansi and up to 256 colors.
+colors.use_color = 3
+
+
 #
 def is_debug_enabled():
     if 'DEBUG' in os.environ and 'false' != os.environ.get('DEBUG'):
@@ -250,7 +255,7 @@ def lint_check(rootdir, filetypes=[], excludes=[]):
                 cmd = ''
                 if '*.py' == filetype:
                     cmd = "flake8 --statistics --show-source --max-line-length=160 --ignore={} {}".format(
-                        'E111,E114,E401,E402,E266,F841,E126',
+                        'E111,E114,E122,E401,E402,E266,F841,E126',
                         ' '.join(found_files))
 
                 elif '*.pp' == filetype:
