@@ -168,15 +168,15 @@ def os_to_settings(os):
         ami = 'ami-746aba14'
         ssh_username = 'ubuntu'
 
-    elif 'centos7' in os:
+    elif 'centos-7' in os:
         ami = 'ami-d2c924b2'
         ssh_username = 'centos'
 
-    elif 'rancheros' in os:
+    elif 'rancheros-v06' in os:
         ami = 'ami-1ed3007e'
         ssh_username = 'rancher'
 
-    elif 'coreos' in os:
+    elif 'coreos-stable' in os:
         ami = 'ami-06af7f66'
         ssh_username = 'core'
 

@@ -109,6 +109,8 @@ class RancherServer(object):
                         # of the old /etc/docker.
                         DockerMachine().create(self.name(), ami, user)
 
+                        log_info("Rancher Server node is available for SSH at \'{}\'...".format(self.IP()))
+
                         self.__add_ssh_keys()
 
                         DockerMachine().scp(self.name(), './lib/bash/docker_reinstall.sh', '/tmp/')
