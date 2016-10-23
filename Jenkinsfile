@@ -40,14 +40,12 @@ try {
       stage ('syntax') {
 	sh "docker run --rm  " +
 	  "-v \"\$(pwd)\":/workdir " +
-	  "--env-file .env " +
 	  "rancherlabs/ci-validation-tests syntax"
       }
 
       stage ('lint') {
 	sh "docker run --rm  " +
 	  "-v \"\$(pwd)\":/workdir " +
-	  "--env-file .env " +
 	  "rancherlabs/ci-validation-tests lint"
       }
 
