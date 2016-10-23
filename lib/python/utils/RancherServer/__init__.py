@@ -30,7 +30,8 @@ class RancherServer(object):
                                     'AWS_ZONE',
                                     'RANCHER_SERVER_OPERATINGSYSTEM',
                                     'RANCHER_VERSION',
-                                    'RANCHER_DOCKER_VERSION']
+                                    'RANCHER_DOCKER_VERSION',
+                                    'RANCHER_ORCHESTRATION']
 
                 result = True
                 missing = []
@@ -52,11 +53,12 @@ class RancherServer(object):
                 prefix = os.environ.get('AWS_PREFIX').replace('.', '-')
                 rancher_version = os.environ['RANCHER_VERSION'].replace('.', '')
                 rancher_server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
+                rancher_orch = os.environ['RANCHER_ORCHESTRATION']
 
                 if '' != prefix:
                         n = "{}-".format(prefix)
 
-                n += "{}-{}-vtest-server0".format(rancher_version, rancher_server_os)
+                n += "{}-{}-{}-vtest-server0".format(rancher_version, rancher_orch, rancher_server_os)
 
                 return n.rstrip()
 

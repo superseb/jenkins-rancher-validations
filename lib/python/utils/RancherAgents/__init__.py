@@ -27,7 +27,8 @@ class RancherAgents(object):
                                     'AWS_SUBNET_ID',
                                     'AWS_SECURITY_GROUP',
                                     'AWS_ZONE',
-                                    'RANCHER_AGENT_OPERATINGSYSTEM']
+                                    'RANCHER_AGENT_OPERATINGSYSTEM',
+                                    'RANCHER_ORCHESTRATION']
 
                 result = True
                 missing = []
@@ -49,11 +50,12 @@ class RancherAgents(object):
                 prefix = os.environ['AWS_PREFIX'].replace('.', '-')
                 rancher_version = os.environ['RANCHER_VERSION'].replace('.', '')
                 rancher_agent_os = os.environ['RANCHER_AGENT_OPERATINGSYSTEM']
+                rancher_orch = os.environ['RANCHER_ORCHESTRATION']
 
                 if '' != prefix:
                         n = "{}-".format(prefix)
 
-                n += "{}-{}-vtest-agent".format(rancher_version, rancher_agent_os)
+                n += "{}-{}-{}-vtest-agent".format(rancher_version, rancher_orch, rancher_agent_os)
                 return n.rstrip()
 
         #
