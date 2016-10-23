@@ -10,3 +10,7 @@ __pycache*
 validation-tests
 *.log
 .docker
+*.log
+.rhel7
+.centos7
+.env*

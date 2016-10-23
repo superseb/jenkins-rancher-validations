@@ -8,3 +8,7 @@ __pycache*
 .\#*
 *.log
 .docker
+*.log
+.rhel7
+.centos7
+.env*

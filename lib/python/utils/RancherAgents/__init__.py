@@ -1,7 +1,7 @@
 import os
 from invoke import run, Failure
 
-from .. import log_info, log_debug, os_to_settings
+from .. import log_info, log_debug, os_to_settings, aws_to_dm_env
 from ..RancherServer import RancherServer, RancherServerError
 
 
@@ -101,19 +101,7 @@ class RancherAgents(object):
                 cmd = "rancher host create --driver amazonec2 "
 
                 # Have to do some envvar translation between Rancher CLI and Docker Machine...
-                log_debug('Performing envvar translation from AWS to Docker Machine...')
-
-                aws_params = {k: v for k, v in os.environ.items() if k.startswith('AWS')}
-                for k, v in aws_params.items():
-                        newk = k.replace('AWS_', 'AMAZONEC2_')
-                        os.environ[newk] = v.rstrip(os.linesep)
-
-                # cover the cases where direct translation of names is not consistent
-                os.environ['AMAZONEC2_ACCESS_KEY'] = os.environ['AWS_ACCESS_KEY_ID']
-                os.environ['AMAZONEC2_SECRET_KEY'] = os.environ.get('AWS_SECRET_ACCESS_KEY')
-                os.environ['AMAZONEC2_REGION'] = os.environ.get('AWS_DEFAULT_REGION')
-
-                log_debug("Docker Machine envvars are: {}".format(run("env | egrep 'AMAZONEC2_'", echo=False, hide=True).stdout))
+                aws_to_dm_env()
 
                 # CoreOS is a unique animal as it relatest to root devices...
                 if 'coreos' in agent_os:
@@ -125,6 +113,7 @@ class RancherAgents(object):
                 # ssh user has to be specified as it differs from OS to OS...
                 settings = os_to_settings(os.environ['RANCHER_AGENT_OPERATINGSYSTEM'])
                 cmd += "--amazonec2-ssh-user {} ".format(settings['ssh_username'])
+                cmd += "--amazonec2-ami {} ".format(settings['ami-id'])
                 os.environ['RANCHER_URL'] = rancher_url
 
                 try:
@@ -133,8 +122,6 @@ class RancherAgents(object):
 
                                 log_debug("Creating agent \'{}\' via Rancher CLI...".format(agent))
                                 run(ccmd, echo=True)
-
-#                        self.__add_ssh_keys()
 
                 except Failure as e:
                         msg = "Failed while provisioning agent!: {} :: {}".format(e.result.return_code, e.result.stderr)

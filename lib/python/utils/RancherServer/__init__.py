@@ -3,7 +3,7 @@ import os
 from invoke import run, Failure
 from requests import ConnectionError, HTTPError
 
-from .. import log_debug, log_info, request_with_retries, os_to_settings
+from .. import log_debug, log_info, log_warn, request_with_retries, os_to_settings
 from ..DockerMachine import DockerMachine, DockerMachineError
 
 
@@ -131,26 +131,35 @@ class RancherServer(object):
         #
         def provision(self):
                 try:
-                        settings = os_to_settings(os.environ['RANCHER_SERVER_OPERATINGSYSTEM'])
-                        ami = settings['ami-id']
+                        server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
+                        settings = os_to_settings(server_os)
                         user = settings['ssh_username']
                         docker_version = os.environ['RANCHER_DOCKER_VERSION']
                         rancher_version = os.environ['RANCHER_VERSION']
                         safety_sleep = 60
+                        puppet_path = ''
 
                         # Create the node with Docker Machine because it does a good job of settings up the TLS
                         # stuff but we are going to remove the packages and install our specified version over top
                         # of the old /etc/docker.
-                        DockerMachine().create(self.name(), ami, user)
+                        DockerMachine().create(self.name())
 
                         log_info("Rancher Server node is available for SSH at \'{}\'...".format(self.IP()))
 
+                        if 'redhat' in server_os or 'centos' in server_os:
+                                DockerMachine().ssh(self.name(), 'sudo yum install -y wget')
+
                         self.__add_ssh_keys()
 
-                        DockerMachine().scp(self.name(), './lib/bash/docker_reinstall.sh', '/tmp/')
-                        DockerMachine().ssh(self.name(), "DOCKER_VERSION={} /tmp/docker_reinstall.sh".format(
-                                docker_version,
-                                user))
+                        if 'coreos' not in server_os and 'rancheros' not in server_os:
+                                log_info("Reinstalling Docker with specified version instead of Docker Machine mandated version...")
+                                DockerMachine().scp(self.name(), './lib/bash/docker_reinstall.sh', '/tmp/')
+                                DockerMachine().ssh(self.name(), "DOCKER_VERSION={} /tmp/docker_reinstall.sh".format(
+                                        docker_version,
+                                        user))
+                        else:
+                                log_warn("Specifying RANCHER_DOCKER_VERSION has no effect for RancherOS and CoreOS!")
+
                         DockerMachine().ssh(
                                 self.name(), "docker run -d --restart=always --name=rancher_server_{} -p 8080:8080 rancher/server:{}".format(
                                         rancher_version,

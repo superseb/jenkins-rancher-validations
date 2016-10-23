@@ -136,6 +136,12 @@ def log_error(msg):
 
 
 #
+def log_warn(msg):
+    log.warn(colors.warn | msg,
+             extra=get_parent_frame_metadata(inspect.currentframe()))
+
+
+#
 def claxon_and_exit(msg):
     log.error(colors.fatal | msg,
               extra=get_parent_frame_metadata(inspect.currentframe()))
@@ -161,11 +167,11 @@ def err_and_exit(msg):
 # FIXME: Have this reference a config file for easy addtl platform support.
 def os_to_settings(os):
     if 'ubuntu-1604' in os:
-        ami = 'ami-20be7540'
+        ami = 'ami-a9d276c9'
         ssh_username = 'ubuntu'
 
     elif 'ubuntu-1404' in os:
-        ami = 'ami-746aba14'
+        ami = 'ami-01f05461'
         ssh_username = 'ubuntu'
 
     elif 'centos-7' in os:
@@ -174,7 +180,7 @@ def os_to_settings(os):
 
     elif 'rhel-7' in os:
         ami = 'ami-99bef1a9'
-        ssh_username = 'redhat'
+        ssh_username = 'ec2-user'
 
     elif 'rancheros-v06' in os:
         ami = 'ami-1ed3007e'
@@ -188,6 +194,25 @@ def os_to_settings(os):
         raise RuntimeError("Unsupported OS specified \'{}\'!".format(os))
 
     return {'ami-id': ami, 'ssh_username': ssh_username}
+
+
+#
+def aws_to_dm_env():
+    log_debug('Performing envvar translation from AWS to Docker Machine...')
+
+    aws_params = {k: v for k, v in os.environ.items() if k.startswith('AWS')}
+    for k, v in aws_params.items():
+        newk = k.replace('AWS_', 'AMAZONEC2_')
+        os.environ[newk] = v.rstrip(os.linesep)
+
+    # cover the cases where direct translation of names is not consistent
+    os.environ['AMAZONEC2_ACCESS_KEY'] = os.environ['AWS_ACCESS_KEY_ID']
+    os.environ['AMAZONEC2_SECRET_KEY'] = os.environ['AWS_SECRET_ACCESS_KEY']
+    os.environ['AMAZONEC2_REGION'] = os.environ['AWS_DEFAULT_REGION']
+
+    log_debug("Docker Machine envvars are: {}".format(run("env | egrep 'AMAZONEC2_'", echo=False, hide=True).stdout))
+
+    return True
 
 
 #

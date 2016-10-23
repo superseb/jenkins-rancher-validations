@@ -1,6 +1,6 @@
-#!/bin/bash
 
-set -ue
+
+set -uex
 
 DOCKER_VERSION="${DOCKER_VERSION:-latest}"
 DOCKER_USER="${DOCKER_USER:-$(whoami)}"
@@ -11,10 +11,12 @@ PATH=$PATH:/opt/puppetlabs/bin:/opt/puppetlabs/puppet/bin
 # Cheap way to figure out rougly what OS family we are running.
 if apt-get --version 2>&1 > /dev/null; then
     sudo apt-get update && sudo apt-get -y install puppet
+    PUPPET_PATH=''
 
 elif yum --version 2>&1 > /dev/null; then
     sudo rpm -Uvh --force https://yum.puppetlabs.com/puppetlabs-release-pc1-el-7.noarch.rpm
     sudo yum install -y puppet
+    PUPPET_PATH='/opt/puppetlabs/bin/'
 
 else
     echo "Found neither yum nor apt for install of Puppet!" 1>&2
@@ -23,12 +25,12 @@ fi
 
 
 # Shut down Puppet because we don't want periodic convergence.
-sudo -E PATH="${PATH}" puppet resource service puppet ensure=stopped enable=false
+sudo -E -s "${PUPPET_PATH}puppet" resource service puppet ensure=stopped enable=false
 
 
 # Install some useful Puppet modules
 for i in puppetlabs/stdlib puppetlabs/apt garethr/docker; do
-  sudo puppet module install -f $i;
+    echo "${PUPPET_PATH}puppet module install $i" | sudo -E -s
 done
 
 
@@ -38,9 +40,9 @@ package { ['docker.io', 'docker-engine', 'docker']: ensure => absent, }
 PUPPET
 
 
-set +e ; sudo -E PATH="${PATH}" -s puppet apply --detailed-exitcodes /tmp/uninstall.pp
+set +e ; echo "${PUPPET_PATH}puppet apply --detailed-exitcodes /tmp/uninstall.pp" | sudo -E -s
 result=$?
-echo "puppet apply exit code: ${result}"
+echo "${PUPPET_PATH}puppet apply exit code: ${result}"
 
 case $result in
     0|2)
@@ -58,6 +60,7 @@ cat << PUPPET > /tmp/install.pp
 class { ::docker:
   ensure => present,
   version => "${DOCKER_VERSION}",
+  repo_opt => '',
   tcp_bind => ['tcp://0.0.0.0:2376'],
   tls_enable => true,
   tls_cacert => '/etc/docker/ca.pem',
@@ -68,7 +71,7 @@ class { ::docker:
 user { "${DOCKER_USER}": groups => 'docker', }
 PUPPET
 
-sudo -E PATH="${PATH}" -s puppet apply --detailed-exitcodes /tmp/install.pp
+echo "${PUPPET_PATH}puppet apply --detailed-exitcodes /tmp/install.pp" | sudo -E -s
 result=$?
 echo "puppet apply exit code: ${result}"
 
@@ -83,4 +86,3 @@ case $result in
 esac
 
 set -e
-

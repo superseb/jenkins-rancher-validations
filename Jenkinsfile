@@ -1,16 +1,32 @@
 #!groovy
 
 
-def resolve_slack_channel() {
-  try { if ( SLACK_CHANNEL ) { return "${SLACK_CHANNEL}" } }
-  catch (MissingPropertyException e) { return "#nathan-webhooks" }
+// RANCHER_VERSION resolution is first via Jenkins Build Parameter RANCHER_VERSION fed in from console,
+// then from $DOCKER_TRIGGER_TAG which is sourced from the Docker Hub Jenkins plugin webhook.
+def rancher_version() {
+  try { if ('' != RANCHER_VERSION) { return RANCHER_VERSION } }
+  catch (MissingPropertyException e) {}
+
+  try { return DOCKER_TRIGGER_TAG }
+  catch (MissingPropertyException e) {}
+
+  echo  'Neither RANCHER_VERSION nor DOCKER_TRIGGER_TAG have been specified!'
+  error()
+}
+
+
+// SLACK_CHANNEL resolution is first via Jenkins Build Parameter SLACK_CHANNEL fed in from console,
+// then from $DOCKER_TRIGGER_TAG which is sourced from the Docker Hub Jenkins plugin webhook.
+def slack_channel() {
+  try { if ('' != SLACK_CHANNEL) { return SLACK_CHANNEL } }
+  catch (MissingPropertyException e) { return '#nathan-webhooks' }
 }
 
 
 // simplify the generation of Slack notifications for start and finish of Job
-def jenkinsSlack(type, channel=resolve_slack_channel()) {
+def jenkinsSlack(type, channel='#nathan-webhooks') {
   def rancher_version = rancher_version()
-  def jobInfo = "\n » ${env.RANCHER_VERSION} :: ${env.JOB_NAME} ${env.BUILD_NUMBER} (<${env.BUILD_URL}|job>) (<${env.BUILD_URL}/console|console>)"
+  def jobInfo = "\n » ${env.RANCHER_VERSION} :: ${env.JOB_NAME} #${env.BUILD_NUMBER} (<${env.BUILD_URL}|job>) (<${env.BUILD_URL}/console|console>)"
   
   if (type == 'start'){
     slackSend channel: "${channel}", color: 'blue', message: "build started${jobInfo}"

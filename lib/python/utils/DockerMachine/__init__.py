@@ -1,7 +1,7 @@
 import os
 from invoke import run, Failure
 
-from .. import log_debug
+from .. import log_debug, aws_to_dm_env, os_to_settings
 
 
 class DockerMachineError(RuntimeError):
@@ -68,19 +68,32 @@ class DockerMachine(object):
             raise DockerMachineError(msg) from e
 
     #
-    def create(self, name, ami, user):
+    def create(self, name):
         try:
-            aws_security_group = os.environ.get('AWS_SECURITY_GROUP')
+
+            # Have to do some envvar translation for Docker Machine.
+            aws_to_dm_env()
+
+            # Docker Machine bugs - doesn't pull these from envvars despite docs.
+            aws_security_group = os.environ['AWS_SECURITY_GROUP']
+            server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
+            settings = os_to_settings(server_os)
 
             # create via Docker Machine because it does all the hard work of
             # creating TLS certs + keys
             cmd = "create " + \
                   "--driver amazonec2 " + \
                   "--amazonec2-security-group {} ".format(aws_security_group) + \
-                  "--amazonec2-ssh-user {} ".format(user) + \
-                  name
+                  "--amazonec2-ssh-user {} ".format(settings['ssh_username']) + \
+                  "--amazonec2-ami {} ".format(settings['ami-id'])
 
-            self.__cmd(cmd, {'AWS_AMI': ami})
+            if 'coreos' in server_os:
+                cmd = cmd + "--amazonec2-device-name /dev/xvda "
+
+            cmd += name
+
+            self.__cmd(cmd)
+
         except DockerMachineError as e:
             msg = "Failed to create \'{}\'! : {}".format(name, e.message)
             log_debug(msg)
@@ -100,7 +113,7 @@ class DockerMachine(object):
     #
     def ssh(self, name, cmd):
         try:
-            self.__cmd("ssh {} {}".format(name, cmd))
+            self.__cmd("--native-ssh ssh {} {}".format(name, cmd))
         except DockerMachineError as e:
             msg = "Failed ssh'ing to machine \'{}\'! : {}".format(name, e.message)
             log_debug(msg)
