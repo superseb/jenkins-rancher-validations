@@ -1,6 +1,6 @@
 import os
 
-from time import sleep
+from requests import ConnectionError, HTTPError
 
 from .. import log_debug, log_info, request_with_retries, os_to_settings
 from ..DockerMachine import DockerMachine, DockerMachineError
@@ -80,6 +80,22 @@ class RancherServer(object):
                 return True
 
         #
+        def __wait_for_api_provider(self):
+
+                api_url = "http://{}:8080/v1/schemas/amazonec2Config".format(self.IP())
+                log_info("Polling \'{}\' for active API provider...".format(api_url))
+
+                try:
+                        response = request_with_retries('GET', api_url, step=60, attempt=60)
+                        log_info(response)
+                except (ConnectionError, HTTPError) as e:
+                        msg = "Timed out waiting for API provider to become available!: {}".format(e.message)
+                        log_debug(msg)
+                        raise RancherServerError(msg) from e
+
+                return True
+
+        #
         def provision(self):
                 try:
                         settings = os_to_settings(os.environ['RANCHER_SERVER_OPERATINGSYSTEM'])
@@ -105,14 +121,11 @@ class RancherServer(object):
                                         rancher_version,
                                         rancher_version))
 
-                        log_info("Sleeping for {} seconds after successful rancher/server provisioning...".format(safety_sleep))
-                        log_info("This is necessary as though the REST API will accept PUT/POST/GET and return HTTP 200's")
-                        log_info("the config changes are **not** yet persistent.")
-                        sleep(60)
+                        self.__wait_for_api_provider()
 
                         log_info("Rancher node hosting rancher/server is available at http://{}:8080".format(self.IP()))
 
-                except DockerMachineError as e:
+                except (RancherServerError, DockerMachineError) as e:
                         msg = "Failed to provision \'{}\'!: {}".format(self.name(), e.message)
                         log_debug(msg)
                         raise RancherServerError(msg) from e
