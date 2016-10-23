@@ -46,7 +46,7 @@ class AWS(object):
             with open('/tmp/puppet/manifest.pp', 'w') as manifest_file:
                 manifest_file.write(manifest)
 
-            run('puppet apply --modulepath=/tmp/puppet/modules --detailed-exitcodes --verbose /tmp/puppet/manifest.pp', echo=True)
+            run('puppet apply --modulepath=/tmp/puppet/modules --verbose /tmp/puppet/manifest.pp', echo=True)
 
         except Failure as e:
             # These are non-failure exit codes for puppet apply.

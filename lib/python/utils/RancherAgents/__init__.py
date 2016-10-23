@@ -147,7 +147,32 @@ class RancherAgents(object):
                 return True
 
         #
-        def deprovision(self, missing_ok=False):
+        def __deprovision_via_puppet(self):
+                try:
+                        run('rm -rf /tmp/puppet', echo=True)
+                        run('mkdir -p /tmp/puppet/modules && cp ./lib/puppet/Puppetfile /tmp/puppet/', echo=True)
+                        run('cd /tmp/puppet && librarian-puppet install --no-verbose --clean --path /tmp/puppet/modules', echo=True)
+
+                        for agent in self.__get_agent_names(3):
+                                manifest = "ec2_instance {{ '{}':\n".format(agent) + \
+                                           "  region => 'us-west-2',\n" + \
+                                           "  ensure => absent,\n" + \
+                                           "}"
+
+                                with open('/tmp/puppet/manifest.pp', 'w') as manifest_file:
+                                        manifest_file.write(manifest)
+
+                        run('puppet apply --modulepath=/tmp/puppet/modules --verbose /tmp/puppet/manifest.pp', echo=True)
+
+                except Failure as e:
+                        # These are non-failure exit codes for puppet apply.
+                        if e.result.exited not in [0, 2]:
+                                msg = "Failed during provision of AWS network!: {}".format(str(e))
+                                log_debug(msg)
+                                raise RancherAgentsError(msg) from e
+
+        #
+        def deprovision(self):
                 cmd = ''
                 log_info("Deprovisioning agents...")
 
@@ -160,14 +185,18 @@ class RancherAgents(object):
                         run(cmd, echo=True, env={'RANCHER_URL': rancher_url})
 
                 except RancherServerError as e:
-                        if missing_ok and "Host does not exist" in e.message:
-                                log_info("Rancher server node not found but missing_ok specified. This is not an error.")
-                        else:
-                                raise RancherAgentsError(e.message) from e
+                        msg = "Failed while getting RancherServer instance but this is not an error."
+                        log_info(msg)
 
                 except Failure as e:
-                        msg = "Failed when running deprovision command \'{}\'!: {} :: {}".format(cmd, e.result.return_code, e.result.stderr)
+                        msg = "Failed Rancher CLI deprovision command. Falling back to Puppt deprovisionining.: {}".format(str(e))
+                        log_info(msg)
+
+                try:
+                        self.__deprovision_via_puppet()
+                except RancherAgentsError as e:
+                        msg = "Failed to deprovision Agents with Puppet!: {}".format(e.message)
                         log_debug(msg)
-                        raise RancherAgentsError(msg)
+                        raise RancherAgentsError(msg) from e
 
                 return True

@@ -88,7 +88,7 @@ def rancher_agents_deprovision(ctx):
     Deprovision Rancher Agent nodes.
     """
     try:
-        RancherAgents().deprovision(missing_ok=True)
+        RancherAgents().deprovision()
     except RancherAgentsError as e:
         err_and_exit("Failed to deprovision Rancher Agents! : {}".format(e.message))
     log_success()
@@ -100,7 +100,7 @@ def rancher_server_deprovision(ctx):
     Deprovision Rancher Server node.
     """
     try:
-        RancherServer().deprovision(missing_ok=True)
+        RancherServer().deprovision()
     except RancherServerError as e:
         err_and_exit("Failed to deprovision Rancher Server node! : {}".format(e.message))
     log_success()

@@ -90,7 +90,7 @@ class DockerMachine(object):
     #
     def rm(self, name):
         try:
-            self.__cmd("rm -y {}".format(name))
+            self.__cmd("rm -y -f {}".format(name))
         except DockerMachineError as e:
             msg = "Failed to deprovision \'{}\'! : {}".format(name, e.message)
             log_debug(msg)
