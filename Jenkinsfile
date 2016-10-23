@@ -10,7 +10,7 @@ def resolve_slack_channel() {
 // simplify the generation of Slack notifications for start and finish of Job
 def jenkinsSlack(type, channel=resolve_slack_channel()) {
   def rancher_version = rancher_version()
-  def jobInfo = "\n » ${rancher_version} :: ${env.JOB_NAME} ${env.BUILD_NUMBER} (<${env.BUILD_URL}|job>) (<${env.BUILD_URL}/console|console>)"
+  def jobInfo = "\n » ${env.RANCHER_VERSION} :: ${env.JOB_NAME} ${env.BUILD_NUMBER} (<${env.BUILD_URL}|job>) (<${env.BUILD_URL}/console|console>)"
   
   if (type == 'start'){
     slackSend channel: "${channel}", color: 'blue', message: "build started${jobInfo}"

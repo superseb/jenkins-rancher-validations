@@ -172,6 +172,10 @@ def os_to_settings(os):
         ami = 'ami-d2c924b2'
         ssh_username = 'centos'
 
+    elif 'rhel-7' in os:
+        ami = 'ami-99bef1a9'
+        ssh_username = 'redhat'
+
     elif 'rancheros-v06' in os:
         ami = 'ami-1ed3007e'
         ssh_username = 'rancher'
