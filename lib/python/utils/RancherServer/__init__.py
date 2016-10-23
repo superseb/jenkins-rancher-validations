@@ -86,8 +86,7 @@ class RancherServer(object):
                 log_info("Polling \'{}\' for active API provider...".format(api_url))
 
                 try:
-                        response = request_with_retries('GET', api_url, step=60, attempt=60)
-                        log_info(response)
+                        request_with_retries('GET', api_url, step=60, attempts=60)
                 except (ConnectionError, HTTPError) as e:
                         msg = "Timed out waiting for API provider to become available!: {}".format(e.message)
                         log_debug(msg)
@@ -121,9 +120,8 @@ class RancherServer(object):
                                         rancher_version,
                                         rancher_version))
 
-                        self.__wait_for_api_provider()
-
-                        log_info("Rancher node hosting rancher/server is available at http://{}:8080".format(self.IP()))
+                        log_info("Rancher node hosting rancher/server will soon be available at http://{}:8080".format(self.IP()))
+                        log_info("WARNING: You may need to poll API endpoints until they are available!")
 
                 except (RancherServerError, DockerMachineError) as e:
                         msg = "Failed to provision \'{}\'!: {}".format(self.name(), e.message)
@@ -195,6 +193,8 @@ class RancherServer(object):
         #
         def configure(self):
                 try:
+                        self.__wait_for_api_provider()
+
                         self.__set_reg_token()
                         self.__set_reg_url()
 
