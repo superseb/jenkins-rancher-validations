@@ -8,3 +8,10 @@ __pycache*
 .env*
 .\#*
 validation-tests
+*.log
+.docker
+*.log
+.rhel7
+.centos7
+.env*
+cattle_test_url

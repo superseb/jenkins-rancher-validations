@@ -1,12 +1,11 @@
 #!/bin/bash
 
-set -eu
+set -eux
 
-cd /workdir
+DEBUG="${DEBUG:-false}"
 
-if [ "rancher_server" == "$1" ]; then
-    exec env $(env) ./scripts/lib/configure/rancher_server.py
-else
-    echo "Must specify 'rancher_server'."
-    exit -1
+env | egrep '^(JENKINS_|RANCHER_|AWS_|DEBUG).*\=.+' > .env
+
+if [ "false" != "${DEBUG}" ]; then
+    cat .env
 fi

@@ -1,9 +1,7 @@
-colorama==0.3.6
-sh==1.11
+plumbum==1.6.2
 requests==2.11.1
 invoke==0.13.0
 numpy==1.11.1
 PyYAML==3.12
 flake8==3.0.4
 autopep8==1.2.4
-httpie==0.9.6
