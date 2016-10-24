@@ -56,6 +56,7 @@ esac
 
 
 echo "ip link delete docker0" | sudo -E -s
+rm -rf /var/lib/docker/network
 
 
 # Now install our specified Docker version with the (hopefully still present) certs from the docker-machine install.
