@@ -74,7 +74,11 @@ class { ::docker:
 user { "${DOCKER_USER}": groups => 'docker', }
 PUPPET
 
+# Do it more than once just in case of a package timeout or some other silliness
 echo "${PUPPET_PATH}puppet apply --detailed-exitcodes /tmp/install.pp" | sudo -E -s
+sleep 2
+echo "${PUPPET_PATH}puppet apply --detailed-exitcodes /tmp/install.pp" | sudo -E -s
+
 result=$?
 echo "puppet apply exit code: ${result}"
 
