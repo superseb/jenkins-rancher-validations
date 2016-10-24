@@ -55,6 +55,9 @@ case $result in
 esac
 
 
+echo "ip link delete docker0" | sudo -E -s
+
+
 # Now install our specified Docker version with the (hopefully still present) certs from the docker-machine install.
 cat << PUPPET > /tmp/install.pp
 class { ::docker:

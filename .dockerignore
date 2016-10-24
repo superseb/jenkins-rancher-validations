@@ -14,3 +14,4 @@ validation-tests
 .rhel7
 .centos7
 .env*
+cattle_test_url

@@ -168,6 +168,9 @@ class RancherServer(object):
                         log_info("Rancher node hosting rancher/server will soon be available at http://{}:8080".format(self.IP()))
                         log_info("WARNING: You may need to poll API endpoints until they are available!")
 
+                        with open('cattle_test_url', 'w') as cattle_test_url:
+                                cattle_test_url.write("http://{}:8080".format(self.IP()))
+
                 except (RancherServerError, DockerMachineError) as e:
                         msg = "Failed to provision \'{}\'!: {}".format(self.name(), e.message)
                         log_debug(msg)

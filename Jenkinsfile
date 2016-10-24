@@ -41,101 +41,142 @@ def jenkinsSlack(type, channel='#nathan-webhooks') {
 }
 
 
-jenkinsSlack('start')
+def lastBuildResult() {
+ def previous_build = currentBuild.getPreviousBuild()
+  if ( null != previous_build ) { return previous_build.result } else { return 'UKNOWN' }
+}
 
-try {
-  node {
-    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
 
-      checkout scm
-
-      stage('bootstrap') {
-	sh "./scripts/bootstrap.sh"
-      }
-
-      stage ('syntax') {
-	sh "docker run --rm  " +
-	  "-v \"\$(pwd)\":/workdir " +
-	  "rancherlabs/ci-validation-tests syntax"
-      }
-
-      stage ('lint') {
-	sh "docker run --rm  " +
-	  "-v \"\$(pwd)\":/workdir " +
-	  "rancherlabs/ci-validation-tests lint"
-      }
-
-      stage ('configure .env file') {
-	sh "./scripts/configure.sh"
-      }
-
-      stage ('deprovision Rancher Agents') {
-	sh "docker run --rm  " +
-	  "-v \"\$(pwd)\":/workdir " +
-	  "--env-file .env " +
-	  "rancherlabs/ci-validation-tests rancher_agents.deprovision"
-      }
-
-      stage ('deprovision rancher/server') {
-	sh "docker run --rm  " +
-	  "-v \"\$(pwd)\":/workdir " +
-	  "--env-file .env " +
-	  "rancherlabs/ci-validation-tests rancher_server.deprovision"
-      }
-
-      stage ('provision AWS') {
-	sh "docker run --rm  " +
-	  "-v \"\$(pwd)\":/workdir " +
-	  "--env-file .env " +
-	  "rancherlabs/ci-validation-tests aws.provision"
-      }
-
-      stage('provision rancher/server') {
-	sh "docker run --rm  " +
-	  "-v \"\$(pwd)\":/workdir " +
-	  "--env-file .env " +
-	  "rancherlabs/ci-validation-tests rancher_server.provision"
-      }
-
-      stage ('configure rancher/server') {
-	sh "docker run --rm  " +
-	  "-v \"\$(pwd)\":/workdir " +
-	  "--env-file .env " +
-	  "rancherlabs/ci-validation-tests rancher_server.configure"
-      }
-
-      stage ('provision Rancher Agents') {
-	sh "docker run --rm  " +
-	  "-v \"\$(pwd)\":/workdir " +
-	  "--env-file .env " +
-	  "rancherlabs/ci-validation-tests rancher_agents.provision"
-      }
-
-      //stage ('run validation tests') {
-      //sh '. ./cattle_test_url.sh && py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest'
-      //}
-      // stage ('run validation tests') {
-      // sh "docker run --rm  " +
-      // 	"-v \"\$(pwd)\":/workdir " +
-      // 	"--env-file .env " +
-      // 	"rancherlabs/ci-validation-tests validation-tests"
-      // }
-
-      stage ('deprovision Rancher Agents') {
-	sh "docker run --rm  " +
-	  "-v \"\$(pwd)\":/workdir " +
-	  "--env-file .env " +
-	  "rancherlabs/ci-validation-tests rancher_agents.deprovision"
-      }
-
-      stage ('deprovision rancher/server') {
-	sh "docker run --rm  " +
-	  "-v \"\$(pwd)\":/workdir " +
-	  "--env-file .env " +
-	  "rancherlabs/ci-validation-tests rancher_server.deprovision"
-      }
-    }
+def via_webhook() {
+  try {
+    def foo = DOCKER_TRIGGER_TAG
+    return true
+  } catch(MissingPropertyexception) {
+    return false
   }
-} catch(err) { currentBuild.result = 'FAILURE' }
+}
+
+// If version is 'master' and triggered via Docker Hub webhook then shut 'er down.
+// We only do master runs via scheduled runs.
+if ( true == via_webhook() && 'master' == rancher_version()) {
+  currentBuild.status = lastBuildResult()
+} else {
+
+  try {
+    jenkinsSlack('start')
+    
+    node {
+      wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
+	
+	checkout scm
+
+	stage('bootstrap') {
+	  sh "./scripts/bootstrap.sh"
+	}
+
+	stage ('syntax') {
+	  sh "docker run --rm  " +
+	    "-v \"\$(pwd)\":/workdir " +
+	    "rancherlabs/ci-validation-tests syntax"
+	}
+
+	stage ('lint') {
+	  sh "docker run --rm  " +
+	    "-v \"\$(pwd)\":/workdir " +
+	    "rancherlabs/ci-validation-tests lint"
+	}
+	
+	stage ('configure .env file') {
+	  withEnv(["RANCHER_VERSION=${RANCHER_VERSION}"]) {
+	    sh "./scripts/configure.sh"
+	  }
+	}
+
+	stage ('deprovision Rancher Agents') {
+	  sh "docker run --rm  " +
+	    "-v \"\$(pwd)\":/workdir " +
+	    "--env-file .env " +
+	    "rancherlabs/ci-validation-tests rancher_agents.deprovision"
+	}
+	
+	stage ('deprovision rancher/server') {
+	  sh "docker run --rm  " +
+	    "-v \"\$(pwd)\":/workdir " +
+	    "--env-file .env " +
+	    "rancherlabs/ci-validation-tests rancher_server.deprovision"
+	}
+
+	stage ('provision AWS') {
+	  sh "docker run --rm  " +
+	    "-v \"\$(pwd)\":/workdir " +
+	    "--env-file .env " +
+	    "rancherlabs/ci-validation-tests aws.provision"
+	}
+
+	stage('provision rancher/server') {
+	  sh "docker run --rm  " +
+	    "-v \"\$(pwd)\":/workdir " +
+	    "--env-file .env " +
+	    "rancherlabs/ci-validation-tests rancher_server.provision"
+	}
+
+	stage ('configure rancher/server') {
+	  sh "docker run --rm  " +
+	    "-v \"\$(pwd)\":/workdir " +
+	    "--env-file .env " +
+	    "rancherlabs/ci-validation-tests rancher_server.configure"
+	}
+
+	stage ('provision Rancher Agents') {
+	  sh "docker run --rm  " +
+	    "-v \"\$(pwd)\":/workdir " +
+	    "--env-file .env " +
+	    "rancherlabs/ci-validation-tests rancher_agents.provision"
+	}
+	
+	stage ('run validation tests') {
+	  CATTLE_TEST_URL = readFile('cattle_test_url').trim()
+	  withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}"]) {
+	    sh "git clone https://github.com/rancher/validation-tests"
+	    try {
+	      sh "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/core/test_container_run_option.py"
+	    } catch(err) {
+	      echo 'Test run had failures. Collecting results...'
+	      echo 'Will not deprovision infrastructure to allow for post-mortem....'
+	    }
+	  }
+	  step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
+	}
+
+	// stage ('run validation tests') {
+	// sh "docker run --rm  " +
+	// 	"-v \"\$(pwd)\":/workdir " +
+	// 	"--env-file .env " +
+	// 	"rancherlabs/ci-validation-tests validation-tests"
+	// }
+
+	if ( 'UNSTABLE' != currentBuild.result ) {
+	  
+	  stage ('deprovision Rancher Agents') {
+	    sh "docker run --rm  " +
+	      "-v \"\$(pwd)\":/workdir " +
+	      "--env-file .env " +
+	      "rancherlabs/ci-validation-tests rancher_agents.deprovision"
+	  }
+	  
+	  stage ('deprovision rancher/server') {
+	    sh "docker run --rm  " +
+	      "-v \"\$(pwd)\":/workdir " +
+	      "--env-file .env " +
+	      "rancherlabs/ci-validation-tests rancher_server.deprovision"
+	  }
+	  
+	}
+      }
+      
+    }
+    
+  } catch(err) { currentBuild.result = 'FAILURE' }
+}
 
 jenkinsSlack('finish')
