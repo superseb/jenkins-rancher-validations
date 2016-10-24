@@ -24,7 +24,7 @@ def slack_channel() {
 
 
 // simplify the generation of Slack notifications for start and finish of Job
-def jenkinsSlack(type, channel='#nathan-webhooks') {
+def jenkinsSlack(type, channel='#ci_cd') {
   def rancher_version = rancher_version()
   def jobInfo = "\n » ${rancher_version} :: ${env.JOB_NAME} #${env.BUILD_NUMBER} (<${env.BUILD_URL}|job>) (<${env.BUILD_URL}/console|console>)"
   
@@ -140,7 +140,8 @@ if ( true == via_webhook() && 'master' == rancher_version()) {
 	  withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}"]) {
 	    sh "git clone https://github.com/rancher/validation-tests"
 	    try {
-	      sh "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/core/test_container_run_option.py"
+	      //	      sh "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/core/test_container_run_option.py"
+	      sh "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/"
 	    } catch(err) {
 	      echo 'Test run had failures. Collecting results...'
 	      echo 'Will not deprovision infrastructure to allow for post-mortem....'
