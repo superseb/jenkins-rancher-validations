@@ -1,5 +1,6 @@
 import os
 from invoke import run, Failure
+from time import sleep
 
 from .. import log_info, log_debug, os_to_settings, aws_to_dm_env
 from ..RancherServer import RancherServer, RancherServerError
@@ -99,7 +100,7 @@ class RancherAgents(object):
                 agents = self.__get_agent_names(count)
                 log_info("Creating {} Rancher Agent nodes via Rancher CLI...".format(count))
 
-                cmd = "rancher host create --driver amazonec2 "
+                cmd = "rancher --wait host create --driver amazonec2 "
 
                 # Have to do some envvar translation between Rancher CLI and Docker Machine...
                 aws_to_dm_env()
@@ -134,6 +135,8 @@ class RancherAgents(object):
                         log_debug(msg)
                         raise RancherAgentsError(msg) from e
 
+                log_info("Sleeping for a few minutes to give the Agents time to settle...")
+                sleep(300)
                 return True
 
         #
