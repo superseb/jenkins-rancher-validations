@@ -40,7 +40,8 @@ package { ['docker.io', 'docker-engine', 'docker']: ensure => absent, }
 PUPPET
 
 
-set +e ; echo "${PUPPET_PATH}puppet apply --detailed-exitcodes /tmp/uninstall.pp" | sudo -E -s
+set +e
+echo "${PUPPET_PATH}puppet apply --detailed-exitcodes /tmp/uninstall.pp" | sudo -E -s
 result=$?
 echo "${PUPPET_PATH}puppet apply exit code: ${result}"
 
@@ -53,10 +54,10 @@ case $result in
         exit -1
         ;;
 esac
-
+set -e
 
 echo "ip link delete docker0" | sudo -E -s
-rm -rf /var/lib/docker/network
+sudo rm -rf /var/lib/docker/network
 
 
 # Now install our specified Docker version with the (hopefully still present) certs from the docker-machine install.
@@ -75,6 +76,7 @@ class { ::docker:
 user { "${DOCKER_USER}": groups => 'docker', }
 PUPPET
 
+set +e
 # Do it more than once just in case of a package timeout or some other silliness
 echo "${PUPPET_PATH}puppet apply --detailed-exitcodes /tmp/install.pp" | sudo -E -s
 sleep 2
@@ -92,5 +94,7 @@ case $result in
         exit -1
         ;;
 esac
-
 set -e
+
+echo "Sleeping for 5 seconds to give Docker a chance to settle..."
+sleep 5

@@ -115,7 +115,7 @@ def rancher_server_provision(ctx):
         result = RancherServer().provision()
     except RancherServerError as e:
         err_and_exit("Failed to provision Rancher Server node! : {}".format(e.message))
-    log_success("[OK] - {}".format(str(result)))
+    log_success()
     return result
 
 

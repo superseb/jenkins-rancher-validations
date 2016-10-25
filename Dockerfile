@@ -11,12 +11,16 @@ ENV PATH "${BINDIR}:/opt/puppetlabs/bin:/opt/puppetlabs/puppet/bin:/usr/local/bi
 
 RUN mkdir -p "${BUILDCACHE}" "${BINDIR}" "${WORKDIR}"
 
+# This is required for auto-provisioning and configuration via SSH using Docker Machine and Rancher CLI
+RUN echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config
+RUN echo "UserKnownHostsFile=/dev/null" >> /etc/ssh/ssh_config
+
 # for AWS VPC provisioning
 ARG PUPPET_RELEASE_URI=https://apt.puppetlabs.com/puppetlabs-release-pc1-jessie.deb
 ADD "${PUPPET_RELEASE_URI} ${BUILDCACHE}/"
 RUN dpkg -i ${BUILDCACHE}/puppetlabs*.deb && \
     apt-get update && \
-    apt-get install -y puppet-agent && \
+    apt-get install -y puppet-agent zip && \
     puppet resource service puppet ensure=stopped enable=false && \
     gem install puppet-lint librarian-puppet aws-sdk-core retries && \
     apt-get clean all && \
@@ -36,6 +40,14 @@ RUN (cd "${BUILDCACHE}" && \
 ARG DOCKER_MACHINE_URI=https://github.com/docker/machine/releases/download/v0.8.2/docker-machine-Linux-x86_64
 ADD "${DOCKER_MACHINE_URI} ${BINDIR}/docker-machine"
 RUN chmod +x "${BINDIR}/docker-machine"
+
+ARG TERRAFORM_URI=https://releases.hashicorp.com/terraform/0.7.7/terraform_0.7.7_linux_amd64.zip
+ADD "${TERRAFORM_URI} ${BUILDCACHE}/"
+RUN (cd "${BUILDCACHE}" && \
+    unzip terraform*.zip && \
+    chmod +x terraform && \
+    cp terraform "${BINDIR}/") && \
+    rm -rf "${BUILDCACHE}/terraform*"
 
 # the scripts for CMD
 ADD ./lib "${WORKDIR}/lib/"

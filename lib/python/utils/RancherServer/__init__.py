@@ -3,7 +3,9 @@ import os
 from invoke import run, Failure
 from requests import ConnectionError, HTTPError
 
-from .. import log_debug, log_info, log_warn, request_with_retries, os_to_settings
+from time import sleep
+
+from .. import log_debug, log_info, log_warn, request_with_retries, os_to_settings, nuke_aws_keypair
 from ..DockerMachine import DockerMachine, DockerMachineError
 
 
@@ -22,7 +24,6 @@ class RancherServer(object):
                 required_envvars = ['AWS_ACCESS_KEY_ID',
                                     'AWS_SECRET_ACCESS_KEY',
                                     'AWS_DEFAULT_REGION',
-                                    'AWS_INSTANCE_TYPE',
                                     'AWS_TAGS',
                                     'AWS_VPC_ID',
                                     'AWS_SUBNET_ID',
@@ -31,7 +32,8 @@ class RancherServer(object):
                                     'RANCHER_SERVER_OPERATINGSYSTEM',
                                     'RANCHER_VERSION',
                                     'RANCHER_DOCKER_VERSION',
-                                    'RANCHER_ORCHESTRATION']
+                                    'RANCHER_ORCHESTRATION',
+                                    'RANCHER_SERVER_AWS_INSTANCE_TYPE']
 
                 result = True
                 missing = []
@@ -60,7 +62,7 @@ class RancherServer(object):
                         prefix = prefix.replace('.', '-')
                         n = "{}-".format(prefix)
 
-                n += "{}-{}-d{}-{}-vtest-server0".format(rancher_version, rancher_orch, docker_version, rancher_server_os)
+                n += "{}-{}-d{}-{}-server0".format(rancher_version, rancher_orch, docker_version, rancher_server_os)
 
                 return n.rstrip()
 
@@ -78,7 +80,7 @@ class RancherServer(object):
                 try:
                         run('rm -rf /tmp/puppet', echo=True)
                         run('mkdir -p /tmp/puppet/modules && cp ./lib/puppet/Puppetfile /tmp/puppet/', echo=True)
-                        run('cd /tmp/puppet && librarian-puppet install --no-verbose --clean --path /tmp/puppet/modules', echo=True)
+                        run('cd /tmp/puppet && librarian-puppet install --no-verbose --clean --path /tmp/puppet/modules >/dev/null', echo=True)
 
                         manifest = "ec2_instance {{ '{}':\n".format(self.name()) + \
                                    "  region => 'us-west-2',\n" + \
@@ -99,20 +101,28 @@ class RancherServer(object):
 
         #
         def deprovision(self):
+
+                # be polite
                 try:
+                        log_info("Deprovisioning Rancher Server via Docker Machine...")
                         DockerMachine().rm(self.name())
 
                 except DockerMachineError as e:
-                        msg = "Failed to deprovision via Docker Machine. Falling back to Puppet.: {}".format(str(e))
-                        log_debug(msg)
+                        log_debug("Failed to deprovision Rancher Server. This is not an error.: {}".format(str(e)))
 
+                # and then be far less polite
                 try:
+                        log_info("Deprovisioning Rancher Server via Puppet...")
                         self.__deprovision_via_puppet()
 
-                except RancherServerError as e:
-                        msg = "Failed to deprovision via Puppet!: {}".format(str(e))
+                        log_info("Removing any AWS keypairs for node '{}'...".format(self.name()))
+                        nuke_aws_keypair(self.name())
+
+                except (RancherServerError, RuntimeError) as e:
+                        msg = "Failed to deprovision!: {}".format(str(e))
                         log_debug(msg)
                         raise RancherServerError(msg) from e
+
                 return True
 
         #
@@ -141,6 +151,8 @@ class RancherServer(object):
                         safety_sleep = 60
                         puppet_path = ''
 
+                        os.environ['AWS_INSTANCE_TYPE'] = os.environ['RANCHER_SERVER_AWS_INSTANCE_TYPE']
+
                         # Create the node with Docker Machine because it does a good job of settings up the TLS
                         # stuff but we are going to remove the packages and install our specified version over top
                         # of the old /etc/docker.
@@ -156,7 +168,7 @@ class RancherServer(object):
                         if 'coreos' not in server_os and 'rancheros' not in server_os:
                                 log_info("Reinstalling Docker with specified version instead of Docker Machine mandated version...")
                                 DockerMachine().scp(self.name(), './lib/bash/docker_reinstall.sh', '/tmp/')
-                                DockerMachine().ssh(self.name(), "DOCKER_VERSION={} /tmp/docker_reinstall.sh".format(
+                                DockerMachine().ssh(self.name(), "DOCKER_VERSION='{}' /tmp/docker_reinstall.sh".format(
                                         docker_version,
                                         user))
                         else:
@@ -183,21 +195,22 @@ class RancherServer(object):
         #
         def __add_ssh_keys(self):
                 log_info("Populating {} with Rancher Labs ssh keys...".format(self.name()))
-                try:
-                        ssh_key_url = "https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci"
-                        server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
-                        settings = os_to_settings(server_os)
-                        ssh_username = settings['ssh_username']
-                        ssh_auth = "~/.ssh/authorized_keys"
+                ssh_key_urls = ['https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci',
+                                'https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/osmatrix']
+                server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
+                settings = os_to_settings(server_os)
+                ssh_username = settings['ssh_username']
+                ssh_auth = "~/.ssh/authorized_keys"
 
-                        cmd = "'wget {} -O - >> {} && chmod 0600 {}'".format(ssh_key_url, ssh_auth, ssh_auth)
-                        DockerMachine().ssh(self.name(), cmd)
+                for keyset in ssh_key_urls:
+                        try:
+                                cmd = "'wget {} -O - >> {} && chmod 0600 {}'".format(keyset, ssh_auth, ssh_auth)
+                                DockerMachine().ssh(self.name(), cmd)
 
-                except DockerMachineError as e:
-                        msg = "Failed while adding ssh keys! : {}".format(e.message)
-                        log_debug(msg)
-                        raise RancherServerError(msg) from e
-
+                        except DockerMachineError as e:
+                                msg = "Failed while adding ssh keys! : {}".format(e.message)
+                                log_debug(msg)
+                                raise RancherServerError(msg) from e
                 return True
 
         #
@@ -229,7 +242,7 @@ class RancherServer(object):
                                 "value": "http://{}:8080".format(self.IP())
                         }
 
-                        response = request_with_retries('PUT', reg_url, request_data, step=20, attempts=100)
+                        response = request_with_retries('PUT', reg_url, request_data)
 
                 except RancherServerError as e:
                         msg = "Failed setting the agent registration URL! : {}".format(e.message)
@@ -244,6 +257,8 @@ class RancherServer(object):
         def configure(self):
                 try:
                         self.__wait_for_api_provider()
+                        log_info("Though the API provider is available, experience suggests sleeping for a bit is a good idea...")
+                        sleep(30)
 
                         self.__set_reg_token()
                         self.__set_reg_url()
