@@ -126,7 +126,11 @@ class RancherAgents(object):
                                 msg = "Failed while trying to count active agents!: {}".format(str(e))
                                 log_debug(msg)
                                 raise RancherAgentsError(msg) from e
-                return True
+
+                if actual_count < count and elapsed_time > timeout:
+                        msg = "Timed out waiting for {} agents to become active!".format(count)
+                        log_debug(msg)
+                        raise RancherAgentsError(msg)
 
         #
         def __reinstall_docker(self):
@@ -214,7 +218,7 @@ class RancherAgents(object):
                                         msg = "Failed while attempting to provision agent '{}'...".format(agent)
                                         log_info(msg)
 
-                                        if 10 <= provisioning_attempts and 3 > provisioning_success:
+                                        if provisioning_attempts >= 10 and provisioning_success < 3:
                                                 msg = "Exceeded 10 attempts at node provisioning with < 3 successes!"
                                                 log_debug(msg)
                                                 raise RancherAgentsError(msg) from e
