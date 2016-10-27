@@ -196,6 +196,7 @@ class RancherAgents(object):
                         settings = os_to_settings(os.environ['RANCHER_AGENT_OPERATINGSYSTEM'])
                         cmd += "--amazonec2-ssh-user {} ".format(settings['ssh_username'])
                         cmd += "--amazonec2-ami {} ".format(settings['ami-id'])
+                        cmd += "--amazonec2-retries 5 "
                         os.environ['RANCHER_URL'] = rancher_url
 
                         # AWS provisioning is unreliable so we'll keep trying up to $count attempts or until we get 3 successes
