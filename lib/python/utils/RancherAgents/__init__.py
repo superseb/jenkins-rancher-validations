@@ -29,7 +29,8 @@ class RancherAgents(object):
                                     'AWS_ZONE',
                                     'RANCHER_AGENT_OPERATINGSYSTEM',
                                     'RANCHER_ORCHESTRATION',
-                                    'RANCHER_AGENT_AWS_INSTANCE_TYPE']
+                                    'RANCHER_AGENT_AWS_INSTANCE_TYPE',
+                                    'RANCHER_DOCKER_VERSION']
 
                 result = True
                 missing = []
@@ -173,6 +174,7 @@ class RancherAgents(object):
                         rancher_url = "http://{}:8080/v2-beta/schemas".format(RancherServer().IP())
                         agent_os = os.environ['RANCHER_AGENT_OPERATINGSYSTEM']
                         docker_version = os.environ['RANCHER_DOCKER_VERSION']
+                        engine_install_url = "http://releases.rancher.com/install-docker/{}".format(docker_version)
                         count = 10
 
                         os.environ['AWS_INSTANCE_TYPE'] = os.environ['RANCHER_AGENT_AWS_INSTANCE_TYPE']
@@ -180,7 +182,7 @@ class RancherAgents(object):
                         agents = self.__get_agent_names(count)
                         log_info("Creating 3 Rancher Agent nodes via Rancher CLI...")
 
-                        cmd = "rancher --wait host create --driver amazonec2 "
+                        cmd = "rancher --wait host create --driver amazonec2 --engine-install-url {}.sh ".format(engine_install_url)
 
                         # Have to do some envvar translation between Rancher CLI and Docker Machine...
                         aws_to_dm_env()
@@ -196,6 +198,7 @@ class RancherAgents(object):
                         settings = os_to_settings(os.environ['RANCHER_AGENT_OPERATINGSYSTEM'])
                         cmd += "--amazonec2-ssh-user {} ".format(settings['ssh_username'])
                         cmd += "--amazonec2-ami {} ".format(settings['ami-id'])
+                        cmd += "--amazonec2-retries 5 "
                         os.environ['RANCHER_URL'] = rancher_url
 
                         # AWS provisioning is unreliable so we'll keep trying up to $count attempts or until we get 3 successes
