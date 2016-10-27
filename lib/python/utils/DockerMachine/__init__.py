@@ -83,6 +83,7 @@ class DockerMachine(object):
             # creating TLS certs + keys
             cmd = "create " + \
                   "--driver amazonec2 " + \
+                  "--amazonec2-retries 5 " + \
                   "--amazonec2-security-group {} ".format(aws_security_group) + \
                   "--amazonec2-ssh-user {} ".format(settings['ssh_username']) + \
                   "--amazonec2-ami {} ".format(settings['ami-id'])
