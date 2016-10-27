@@ -1,15 +1,29 @@
-import os, sys, fnmatch, numpy, logging, yaml, inspect, requests, json
+import os, sys, fnmatch, numpy, logging, yaml, inspect, requests, json, boto3
 
 from plumbum import colors
 from invoke import run, Failure
 from os import walk
 from requests import ConnectionError, HTTPError
 from time import sleep
+from boto3.exceptions import Boto3Error
 
 
 # This might be bad...assuming that wherever this is running its always going to be
 # TERM=ansi and up to 256 colors.
 colors.use_color = 3
+
+
+#
+def nuke_aws_keypair(name):
+    log_debug("Removing AWS key pair '{}'...".format(name))
+
+    try:
+        boto3.resource('ec2', region_name='us-west-2').KeyPair(name).delete()
+    except Boto3Error as e:
+        log_debug(str(e.message))
+        raise RuntimeError(e.message) from e
+
+    return True
 
 
 #
