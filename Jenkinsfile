@@ -46,12 +46,12 @@ def custom_validation_test_cmd() {
 // then from $DOCKER_TRIGGER_TAG which is sourced from the Docker Hub Jenkins plugin webhook.
 def slack_channel() {
   try { if ('' != SLACK_CHANNEL) { return SLACK_CHANNEL } }
-  catch (MissingPropertyException e) { return '#nathan-webhooks' }
+  catch (MissingPropertyException e) { return '#ci_cd' }
 }
 
 
 // simplify the generation of Slack notifications for start and finish of Job
-def jenkinsSlack(type, channel=slack_channel()) {
+def jenkinsSlack(type, channel="#ci_cd") {
   def rancher_version = rancher_version()
   def jobInfo = "\n » ${rancher_version} :: ${env.JOB_NAME} #${env.BUILD_NUMBER} (<${env.BUILD_URL}|job>) (<${env.BUILD_URL}/console|console>)"
   
@@ -175,11 +175,11 @@ if ( true == via_webhook() && 'master' == rancher_version()) {
 		  if ( "true" == "${PIPELINE_SMOKE_TEST_ONLY}" ) {
 		    sh "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/core/test_container_run_option.py"
 		  } else {
-		    if ( "false" != "${CUSTOM_VALIDATION_TEST_CMD}" ) {
-		      sh "${CUSTOM_VALIDATION_TEST_CMD}"
-		    } else {
+		    //		    if ( "false" != "${CUSTOM_VALIDATION_TEST_CMD}" ) {
+		    //		      sh "${CUSTOM_VALIDATION_TEST_CMD}"
+		    //		    } else {
 		      sh "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/"
-		    }
+		    //		    }
 		  }
 		} catch(err) {
 		  echo 'Test run had failures. Collecting results...'

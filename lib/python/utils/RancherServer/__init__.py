@@ -5,7 +5,7 @@ from requests import ConnectionError, HTTPError
 
 from time import sleep
 
-from .. import log_debug, log_info, log_warn, request_with_retries, os_to_settings, nuke_aws_keypair
+from .. import log_debug, log_info, request_with_retries, os_to_settings, nuke_aws_keypair
 from ..DockerMachine import DockerMachine, DockerMachineError
 
 
@@ -33,7 +33,8 @@ class RancherServer(object):
                                     'RANCHER_VERSION',
                                     'RANCHER_DOCKER_VERSION',
                                     'RANCHER_ORCHESTRATION',
-                                    'RANCHER_SERVER_AWS_INSTANCE_TYPE']
+                                    'RANCHER_SERVER_AWS_INSTANCE_TYPE',
+                                    'RANCHER_DOCKER_VERSION']
 
                 result = True
                 missing = []
@@ -165,15 +166,9 @@ class RancherServer(object):
 
                         self.__add_ssh_keys()
 
-                        if 'coreos' not in server_os and 'rancheros' not in server_os:
-                                log_info("Reinstalling Docker with specified version instead of Docker Machine mandated version...")
-                                DockerMachine().scp(self.name(), './lib/bash/docker_reinstall.sh', '/tmp/')
-                                DockerMachine().ssh(self.name(), "DOCKER_VERSION='{}' /tmp/docker_reinstall.sh".format(
-                                        docker_version,
-                                        user))
-                        else:
-                                log_warn("Specifying RANCHER_DOCKER_VERSION has no effect for RancherOS and CoreOS!")
-
+                        #
+                        log_info("Starting Rancher server...")
+                        DockerMachine().ssh(self.name(), '\'echo "usermod -a -G docker $USER" | sudo -E -s\'')
                         DockerMachine().ssh(
                                 self.name(), "docker run -d --restart=always --name=rancher_server_{} -p 8080:8080 rancher/server:{}".format(
                                         rancher_version,

@@ -77,11 +77,14 @@ class DockerMachine(object):
             # Docker Machine bugs - doesn't pull these from envvars despite docs.
             aws_security_group = os.environ['AWS_SECURITY_GROUP']
             server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
+            docker_version = os.environ['RANCHER_DOCKER_VERSION']
+            engine_install_url = "http://releases.rancher.com/install-docker/{}.sh".format(docker_version)
             settings = os_to_settings(server_os)
 
             # create via Docker Machine because it does all the hard work of
             # creating TLS certs + keys
             cmd = "create " + \
+                  "--engine-install-url {} ".format(engine_install_url) + \
                   "--driver amazonec2 " + \
                   "--amazonec2-retries 5 " + \
                   "--amazonec2-security-group {} ".format(aws_security_group) + \
