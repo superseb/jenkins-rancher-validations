@@ -51,20 +51,20 @@ def slack_channel() {
 
 
 // simplify the generation of Slack notifications for start and finish of Job
-def jenkinsSlack(type, channel="#ci_cd") {
+def jenkinsSlack(type, channel) {
   channel = slack_channel()
   def rancher_version = rancher_version()
   def jobInfo = "\n » ${rancher_version} :: ${env.JOB_NAME} #${env.BUILD_NUMBER} (<${env.BUILD_URL}|job>) (<${env.BUILD_URL}/console|console>)"
   
   if (type == 'start'){
-    slackSend channel: "${channel}", color: 'blue', message: "build started${jobInfo}"
+    slackSend channel: channel, color: 'blue', message: "build started${jobInfo}"
   }
   if (type == 'finish'){
     def buildColor = currentBuild.result == null? "good": "warning"
     def buildStatus = currentBuild.result == null? "SUCCESS": currentBuild.result
     def msg = "build finished - ${buildStatus}${jobInfo}"
     if ('UNSTABLE' == currentBuild.result) { msg = msg + ' :: infrastructure is retained for post-mortem for FAILURE or UNSTABLE!' }
-    slackSend channel: "${channel}", color: buildColor, message: "${msg}"
+    slackSend channel: channel, color: buildColor, message: "${msg}"
   }
 }
 
