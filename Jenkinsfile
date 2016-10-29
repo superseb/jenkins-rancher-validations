@@ -52,6 +52,7 @@ def slack_channel() {
 
 // simplify the generation of Slack notifications for start and finish of Job
 def jenkinsSlack(type, channel="#ci_cd") {
+  channel = slack_channel()
   def rancher_version = rancher_version()
   def jobInfo = "\n » ${rancher_version} :: ${env.JOB_NAME} #${env.BUILD_NUMBER} (<${env.BUILD_URL}|job>) (<${env.BUILD_URL}/console|console>)"
   
