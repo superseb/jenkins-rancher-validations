@@ -51,7 +51,7 @@ def slack_channel() {
 
 
 // simplify the generation of Slack notifications for start and finish of Job
-def jenkinsSlack(type, channel) {
+def jenkinsSlack(type) {
   channel = slack_channel()
   def rancher_version = rancher_version()
   def jobInfo = "\n » ${rancher_version} :: ${env.JOB_NAME} #${env.BUILD_NUMBER} (<${env.BUILD_URL}|job>) (<${env.BUILD_URL}/console|console>)"
@@ -91,11 +91,11 @@ if ( true == via_webhook() && 'master' == rancher_version()) {
 } else {
 
   try {
-    jenkinsSlack('start')
     
     node {
       wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
-	
+
+	jenkinsSlack('start')
 	checkout scm
 
 	stage('bootstrap') {
