@@ -25,6 +25,10 @@ def syntax(ctx):
     syntax_check(os.path.dirname(__file__), 'pp')
     log_success()
 
+    log_info("Syntax checking of Ruby files...")
+    syntax_check(os.path.dirname(__file__), 'rb')
+    log_success()
+
     log_info("Syntax checking of BASH scripts..")
     syntax_check(os.path.dirname(__file__), 'sh')
     log_success()
@@ -56,6 +60,10 @@ def lint(ctx):
     log_info("Lint checking of Puppet files...")
     lint_check(os.path.dirname(__file__), 'pp', excludes=['validation-tests'])
     log_success()
+
+#    log_info("Lint checking of Ruby files...")
+#    lint_check(os.path.dirname(__file__), 'rb', excludes=['validation-tests'])
+#    log_success()
 
 
 @task(reset)
@@ -170,11 +178,9 @@ rs = Collection('rancher_server')
 rs.add_task(rancher_server_provision, 'provision')
 rs.add_task(rancher_server_deprovision, 'deprovision')
 rs.add_task(rancher_server_configure, 'configure')
-# rs.add_task(rancher_server_validate, 'validate')
 ns.add_collection(rs)
 
 ra = Collection('rancher_agents')
 ra.add_task(rancher_agents_provision, 'provision')
 ra.add_task(rancher_agents_deprovision, 'deprovision')
-# ra.add_task(rancher_agents_validate, 'validate')
 ns.add_collection(ra)

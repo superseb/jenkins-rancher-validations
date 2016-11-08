@@ -1,4 +1,4 @@
-import os, sys, fnmatch, numpy, logging, yaml, inspect, requests, json, boto3
+import os, sys, fnmatch, numpy, logging, yaml, inspect, requests, boto3
 
 from plumbum import colors
 from invoke import run, Failure
@@ -90,29 +90,36 @@ def request_with_retries(method, url, data={}, step=10, attempts=10):
     response = None
     current_attempts = 0
 
-    log_info("Sending request \'{}\' \'{}\' with data \'{}\'...".format(method, url, data))
+    log_info("Sending request '{}' '{}'...".format(method, url))
+    log_debug("Payload data: {}".format(data))
 
     while True:
         try:
             current_attempts += 1
             if 'PUT' == method:
-                response = requests.put(url, data, timeout=timeout)
+                response = requests.put(url, timeout=timeout, json=data)
             elif 'GET' == method:
                 response = requests.get(url, timeout=timeout)
             elif 'POST' == method:
-                response = requests.post(url, timeout=timeout)
+                response = requests.post(url, timeout=timeout, json=data)
             else:
                 log_error("Unsupported method \'{}\' specified!".format(method))
                 return False
 
-            log_debug("Response: {} :: {}".format(response.status_code, json.loads(response.text)))
-            return True
+            log_info("response code: HTTP {}".format(response.status_code))
+            log_debug("response: Headers:: {}".format(response.headers))
+
+            # we might get a 200, 201, etc
+            if not str(response.status_code).startswith('2'):
+                response.raise_for_status()
+            else:
+                return True
 
         except (ConnectionError, HTTPError) as e:
             if current_attempts >= attempts:
-                msg = "Exceeded max attempts. Giving up!: {}".format(e.message)
+                msg = "Exceeded max attempts. Giving up!: {}".format(str(e))
                 log_debug(msg)
-                raise e
+                raise Failure(msg) from e
             else:
                 log_info("Request did not succeeed. Sleeping and trying again... : {}".format(str(e)))
                 sleep(step)
@@ -214,6 +221,10 @@ def os_to_settings(os):
 def aws_to_dm_env():
     log_debug('Performing envvar translation from AWS to Docker Machine...')
 
+    # inject some EC2 tags we're going to need later
+    docker_version_tag = "rancher.docker.version,{}".format(os.environ['RANCHER_DOCKER_VERSION'])
+    os.environ['AWS_TAGS'] = "{},{}".format(os.environ['AWS_TAGS'], docker_version_tag)
+
     aws_params = {k: v for k, v in os.environ.items() if k.startswith('AWS')}
     for k, v in aws_params.items():
         newk = k.replace('AWS_', 'AMAZONEC2_')
@@ -269,7 +280,7 @@ def find_files(rootdir, pattern, excludes=[]):
 #
 def lint_check(rootdir, filetypes=[], excludes=[]):
 
-    default_filetypes = ['py', 'pp']
+    default_filetypes = ['py', 'pp', 'rb']
     result = True
 
     # if someone passes a non-list then cast it to a list
@@ -307,9 +318,12 @@ def lint_check(rootdir, filetypes=[], excludes=[]):
                         ' '.join(found_files))
 
                 elif '*.pp' == filetype:
-                    cmd = "puppet-lint {}".join(' '.join(found_files))
+                    cmd = "puppet-lint {}".format(' '.join(found_files))
 
-                cmd = cmd.format(' '.join(found_files))
+                elif '*.rb' == filetype:
+                    cmd = "ruby-lint {}".format(' '.join(found_files))
+
+#                cmd = cmd.format(' '.join(found_files))
                 log_debug("Lint checking \'{}\'...".format(' '.join(found_files)))
                 if is_debug_enabled():
                     run(cmd, echo=True)
@@ -322,7 +336,7 @@ def lint_check(rootdir, filetypes=[], excludes=[]):
 #
 def syntax_check(rootdir, filetypes=[], excludes=[]):
 
-    default_filetypes = ['sh', 'py', 'yaml', 'pp']
+    default_filetypes = ['sh', 'py', 'yaml', 'pp', 'rb']
     result = True
 
     # if someone passes a non-list then cast it to a list
@@ -362,6 +376,9 @@ def syntax_check(rootdir, filetypes=[], excludes=[]):
 
                     elif '*.pp' == filetype:
                         cmd = "puppet parser validate {}"
+
+                    elif '*.rb' == filetype:
+                        cmd = "ruby -c {}"
 
                     # do the syntax check
                     if '*.yaml' == filetype or '*.yaml' == filetype:

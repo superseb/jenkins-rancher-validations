@@ -15,6 +15,12 @@ RUN mkdir -p "${BUILDCACHE}" "${BINDIR}" "${WORKDIR}"
 RUN echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config
 RUN echo "UserKnownHostsFile=/dev/null" >> /etc/ssh/ssh_config
 
+# for inspec validation of spun infra
+RUN apt-get update && \
+    apt-get install -y autoconf bison build-essential libssl-dev libyaml-dev libreadline6-dev zlib1g-dev libncurses5-dev libffi-dev libgdbm3 libgdbm-dev && \
+    apt-get install -y ruby2.1 ruby2.1-dev && \
+    gem2.1 install --no-ri --no-rdoc inspec colorize ruby-lint
+
 # for AWS VPC provisioning
 ARG PUPPET_RELEASE_URI=https://apt.puppetlabs.com/puppetlabs-release-pc1-jessie.deb
 ADD "${PUPPET_RELEASE_URI} ${BUILDCACHE}/"

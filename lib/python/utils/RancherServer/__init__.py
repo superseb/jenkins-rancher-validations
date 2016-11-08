@@ -102,10 +102,9 @@ class RancherServer(object):
 
         #
         def deprovision(self):
-
+                log_info("Deprovisioning Rancher Server via Docker Machine...")
                 # be polite
                 try:
-                        log_info("Deprovisioning Rancher Server via Docker Machine...")
                         DockerMachine().rm(self.name())
 
                 except DockerMachineError as e:
@@ -239,8 +238,8 @@ class RancherServer(object):
 
                         response = request_with_retries('PUT', reg_url, request_data)
 
-                except RancherServerError as e:
-                        msg = "Failed setting the agent registration URL! : {}".format(e.message)
+                except Failure as e:
+                        msg = "Failed setting the agent registration URL! : {}".format(str(e))
                         log_debug(msg)
                         raise RancherServerError(msg) from e
 
