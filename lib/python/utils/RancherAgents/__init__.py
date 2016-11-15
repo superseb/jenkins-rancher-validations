@@ -4,6 +4,7 @@ from time import sleep, time
 from requests import ConnectionError, HTTPError
 
 from .. import log_info, log_debug, os_to_settings, aws_to_dm_env, nuke_aws_keypair, request_with_retries
+from .. import provision_aws_volume, deprovision_aws_volume
 from ..RancherServer import RancherServer, RancherServerError
 
 
@@ -27,6 +28,7 @@ class RancherAgents(object):
                                     'AWS_SUBNET_ID',
                                     'AWS_SECURITY_GROUP',
                                     'AWS_ZONE',
+                                    'AWS_INSTANCE_PROFILE',
                                     'RANCHER_AGENT_OPERATINGSYSTEM',
                                     'RANCHER_ORCHESTRATION',
                                     'RANCHER_AGENT_AWS_INSTANCE_TYPE',
@@ -118,28 +120,13 @@ class RancherAgents(object):
                                 log_info(msg)
                 return True
 
-        #
-        def __get_docker_install_url(self):
-                docker_install_url = os.environ.get('DOCKER_INSTALL_URL').rstrip()
-                if not docker_install_url:
-                        docker_install_url = 'https://raw.githubusercontent.com/nrvale0/jenkins-rancher-validations/master/scripts/rancher_ci_bootstrap.sh'
-                return docker_install_url
-
-        #
-        def __compute_tags(self):
-                tags = os.environ['AWS_TAGS']
-                tags += ",rancher.ci.docker.version,{}".format(os.environ['RANCHER_DOCKER_VERSION'])
-                tags += ",rancher.ci.docker.install_url,{}".format(self.__get_docker_install_url())
-                return tags
-
-        #
         def __provision_via_rancher_api(self):
                 provision_url = "http://{}:8080/v2-beta/projects/1a5/host".format(RancherServer().IP())
                 agent_os = os.environ['RANCHER_AGENT_OPERATINGSYSTEM']
                 os_settings = os_to_settings(agent_os)
                 docker_version = os.environ['RANCHER_DOCKER_VERSION']
 
-                # CoreOS is a bit of an oddball here...
+                # CoreOS is a bit of an oddball about root storage device name
                 if 'coreos' in agent_os:
                         root_device = '/dev/xvda'
                 else:
@@ -149,6 +136,18 @@ class RancherAgents(object):
                 # Docker Machine/go-machine fails pretty often.
                 provisioning_attempts = 0
                 for agent_name in self.__get_agent_names(10):
+
+                        # redhat OS family needs a lot of custom setup
+                        if 'rhel' in agent_os or 'centos' in agent_os:
+                                addtl_vol_name = "{}-docker".format(agent_name)
+                                addtl_volume_id = provision_aws_volume(
+                                        name=addtl_vol_name,
+                                        tags=os.environ['AWS_TAGS'],
+                                        size=40)
+
+                                tags = os.environ['AWS_TAGS'] + ",rancherlabs.ci.addtl_volume,{},rancher.docker.version,{}".format(
+                                        addtl_volume_id,
+                                        docker_version)
 
                         amazonec2_config = {
                                 'type': 'amazonec2Config',
@@ -161,14 +160,15 @@ class RancherAgents(object):
                                 'securityGroup': os.environ['AWS_SECURITY_GROUP'],
                                 'sshUser': os_settings['ssh_username'],
                                 'subnetId': os.environ['AWS_SUBNET_ID'],
-                                'tags': self.__compute_tags(),
+                                'tags': tags,
                                 'vpcId': os.environ['AWS_VPC_ID'],
                                 'zone': os.environ['AWS_ZONE'],
+                                'iamInstanceProfile': os.environ['AWS_INSTANCE_PROFILE'],
                         }
 
                         payload = {
                                 'type': 'machine',
-                                'engineInstallUrl': self.__get_docker_install_url(),
+                                'engineInstallUrl': "https://releases.rancher.com/install-docker/{}.sh".format(docker_version),
                                 'amazonec2Config': amazonec2_config,
                                 'hostname': agent_name,
                         }
@@ -215,6 +215,7 @@ class RancherAgents(object):
                         docker_version = os.environ['RANCHER_DOCKER_VERSION']
                         count = 10
                         engine_install_url = self.__get_docker_install_url()
+                        iam_profile = os.environ['AWS_INSTANCE_PROFILE']
 
                         os.environ['AWS_INSTANCE_TYPE'] = os.environ['RANCHER_AGENT_AWS_INSTANCE_TYPE']
 
@@ -238,6 +239,7 @@ class RancherAgents(object):
                         cmd += "--amazonec2-ssh-user {} ".format(settings['ssh_username'])
                         cmd += "--amazonec2-ami {} ".format(settings['ami-id'])
                         cmd += "--amazonec2-retries 5 "
+                        cmd += "--amazonec2-iam-instance-profile {}".format(iam_profile)
                         os.environ['RANCHER_URL'] = rancher_url
 
                         # AWS provisioning is unreliable so we'll keep trying up to $count attempts or until we get 3 successes
@@ -367,6 +369,8 @@ class RancherAgents(object):
                         for agent in self.__get_agent_names(20):
                                 log_info("Nuking any lingering Agent AWS keypairs for node '{}'...".format(agent))
                                 nuke_aws_keypair(agent)
+                                log_info("Removing vol '{}-docker' if it exists...".format(agent))
+                                deprovision_aws_volume("{}-docker".format(agent))
 
                 except (RancherServerError, RuntimeError) as e:
                         msg = "Failed with deprovisining agent!: {}".format(str(e))

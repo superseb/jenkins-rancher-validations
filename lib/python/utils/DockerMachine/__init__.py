@@ -32,13 +32,19 @@ class DockerMachine(object):
 
     #
     def __cmd(self, op, env={}, echo=True, hide=None):
-        cmd = ''
+        cmd = None
+
         if '' != self.bin_path:
             cmd = "{}".format(self.bin_path)
         else:
             cmd = "docker-machine "
 
         cmd += "-s {} ".format(self.storage_path)
+
+        if os.environ.get('DEBUG'):
+            if os.environ['DEBUG']:
+                cmd += '-D '
+
         cmd += "{}".format(op)
 
         try:
@@ -46,9 +52,9 @@ class DockerMachine(object):
             result = run(cmd, echo=echo, hide=hide)
 
         except Failure as e:
-            message = "docker-machine command failed! : {} :: {}".format(e.result.return_code, e.result.stderr)
-            log_debug(message)
-            raise DockerMachineError(message) from e
+            msg = "docker-machine command failed! : {} :: {}".format(e.result.return_code, e.result.stderr)
+            log_debug(msg)
+            raise DockerMachineError(msg) from e
 
         return result.stdout
 
@@ -69,22 +75,21 @@ class DockerMachine(object):
 
     #
     def create(self, name):
-        try:
 
+        try:
             # Have to do some envvar translation for Docker Machine.
             aws_to_dm_env()
 
             # Docker Machine bugs - doesn't pull these from envvars despite docs.
             aws_security_group = os.environ['AWS_SECURITY_GROUP']
             server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
-            docker_version = os.environ['RANCHER_DOCKER_VERSION']
-            engine_install_url = "http://releases.rancher.com/install-docker/{}.sh".format(docker_version)
             settings = os_to_settings(server_os)
+            docker_version = os.environ['RANCHER_DOCKER_VERSION']
 
             # create via Docker Machine because it does all the hard work of
             # creating TLS certs + keys
             cmd = "create " + \
-                  "--engine-install-url {} ".format(engine_install_url) + \
+                  "--engine-install-url https://releases.rancher.com/install-docker/{}.sh ".format(docker_version) + \
                   "--driver amazonec2 " + \
                   "--amazonec2-retries 5 " + \
                   "--amazonec2-security-group {} ".format(aws_security_group) + \

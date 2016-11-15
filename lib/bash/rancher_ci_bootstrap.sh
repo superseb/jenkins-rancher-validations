@@ -1,6 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 
-set -eux
+# send all stdout & stderr to rancherci-bootstrap.log
+exec > /tmp/rancherci-bootstrap.log
+exec 2>&1
+set -uxe
 
 
 ###############################################################################
@@ -8,8 +11,8 @@ set -eux
 ###############################################################################
 get_osfamily() {
     local osfamily='unknown'
-    
-    # ugly way to figure out rougly what OS family we are running.
+
+    # ugly way to figure out what OS family we are running.
     set +e
     if apt-get --version > /dev/null 2>&1; then
 	osfamily='debian'
@@ -17,7 +20,7 @@ get_osfamily() {
 	osfamily='redhat'
     fi
     set -e
-    
+
     echo "${osfamily}"
 }
 
@@ -35,11 +38,14 @@ fetch_rancherlabs_ssh_keys() {
 # install some things required to query Docker version from tag
 ###############################################################################
 system_prep() {
-    local osfamily="$(get_osfamily)"
-    
+    local osfamily
+
+    osfamily="$(get_osfamily)" || exit $?
+
     case $osfamily in
 	'redhat')
-	    sudo yum install -y wget jq python-pip
+	    sudo yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+	    sudo yum install -y wget jq python-pip htop
 	    sudo pip install awscli
 	    sudo wget -O /usr/local/bin/ec2metadata http://s3.amazonaws.com/ec2metadata/ec2-metadata
 	    sudo chmod +x /usr/local/bin/ec2metadata
@@ -53,14 +59,74 @@ system_prep() {
 
 
 ###############################################################################
+# get the AWS region
+###############################################################################
+aws_region() {
+    local region
+
+    region="$(ec2metadata -z | cut -f2 -d' ' | sed -e 's/.$//g')" || exit $?
+
+    if [ -z "${region}" ]; then
+	echo 'Falied to query AWS region!'
+	exit -1
+    fi
+    echo "${region}"
+}
+
+
+###############################################################################
+# get the volid for extra volumes (redhat osfamily)
+###############################################################################
+aws_instance_id() {
+    local instance_id
+
+    instance_id="$(ec2metadata --instance-id | cut -f2 -d' ')" || exit $?
+
+    if [ -z "${instance_id}" ]; then
+	echo 'Failed to query AWS instance-id!'
+	exit -1
+    fi
+    echo "${instance_id}"
+}
+
+###############################################################################
+# get the volid for extra volumes (redhat osfamily)
+###############################################################################
+aws_addtl_volid() {
+    local instance_id
+    local vol_id
+
+    instance_id="$(aws_instance_id)" || exit $?
+    vol_id="$(aws ec2 --region us-west-2 describe-tags --filter Name=resource-id,Values="${instance_id}" --out=json | \
+			 jq '.Tags[]| select(.Key == "rancherlabs.ci.addtl_volume")|.Value' | \
+			 sed -e 's/\"//g')" || exit $?
+
+    if [ -z "${vol_id}" ]; then
+	echo 'Failed to query secondary volid from AWS.'
+	exit 1
+    fi
+    echo "${vol_id}"
+}
+
+
+###############################################################################
 # get the Docker version specified in AWS tag rancher.docker.version
 ###############################################################################
 get_specified_docker_version() {
+    local instance_id
+    local region
+    local docker_version
 
-    local instance_id=$(ec2metadata --instance-id | cut -f2 -d' ')
-    local docker_version=$(aws ec2 --region us-west-2 describe-tags --filter Name=resource-id,Values="${instance_id}" --out=json | \
+    instance_id="$(aws_instance_id)" || exit $?
+    region="$(aws_region)" || exit $?
+    docker_version="$(aws ec2 --region "${region}" describe-tags --filter Name=resource-id,Values="${instance_id}" --out=json | \
 			 jq '.Tags[]| select(.Key == "rancher.docker.version")|.Value' | \
-			 sed -e 's/\"//g')
+			 sed -e 's/\"//g')" || exit $?
+
+    if [ -z "${docker_version}" ]; then
+	echo 'Failed to query rancher.docker.version from instance tags.'
+	exit 1
+    fi
     echo "${docker_version}"
 }
 
@@ -71,35 +137,75 @@ get_specified_docker_version() {
 docker_install() {
     local docker_version="${1}"
     wget -O - "https://releases.rancher.com/install-docker/${docker_version}.sh" | sudo bash -
+    sudo systemctl restart docker
 }
 
 
 ###############################################################################
 # make adjustments to LVM etc for RedHat OS family
 ###############################################################################
-prep_for_redhat() {
-    yum install -y lvm2
-    pvcreate /dev/sdb
-    vgcreate /dev/sdb
-    lvcreate --wipesignatures y -n thinpool docker -l 95%VG
-    lvcreate --wipesignatures y -n thinpoolmeta docker -l 1%VG
-    lvconvert -y --zero n -c 512K --thinpool docker/thinpool --poolmetadata docker/thinpoolmeta
+config_for_redhat() {
+    local instance_id
+    local docker_vol_volid
+    local region
+
+    instance_id="$(aws_instance_id)" || exit $?
+    docker_vol_volid="$(aws_addtl_volid)" || exit $?
+    region="$(aws_region)" || exit $?
+
+    sudo aws ec2 attach-volume --region "${region}" --device /dev/xvdb --volume-id "${docker_vol_volid}" --instance-id "${instance_id}"
+
+    sudo yum install -y lvm2
+    sudo pvcreate -ff -y /dev/xvdb
+    sudo vgcreate docker /dev/xvdb
+
+    sudo systemctl restart systemd-udevd.service
+    echo "Waiting for storage device mappings to settle..."; sleep 10
     
-    tee /etc/lvm/profile/docker-thinpool.profile <<-EOF
+    sudo lvcreate --wipesignatures y -n thinpool docker -l 95%VG
+    sudo lvcreate --wipesignatures y -n thinpoolmeta docker -l 1%VG
+    sudo lvconvert -y --zero n -c 512K --thinpool docker/thinpool --poolmetadata docker/thinpoolmeta
+    
+    sudo systemctl stop docker.service
+
+    echo 'Modifying Docker config to use LVM thinpool setup...'
+    sudo tee /etc/lvm/profile/docker-thinpool.profile <<-EOF
 activation {
     thin_pool_autoextend_threshold=80
     thin_pool_autoextend_percent=20
 }
 EOF
 
-    lvchange --metadataprofile docker-thinpool docker/thinpool
-    lvs -o+seg_monitor
+    sudo lvchange --metadataprofile docker-thinpool docker/thinpool
+    sudo lvs -o+seg_monitor
 
-    tee /etc/sysconfig/docker-storage <<-EOF
-DOCKER_STORAGE_OPTIONS=--storage-driver=devicemapper --storage-opt=dm.thinpooldev=/dev/mapper/docker-thinpool --storage-opt dm.use_deferred_removal=true
+    sudo tee /usr/lib/systemd/system/docker.service <<-EOF
+[Unit]
+Description=Docker Application Container Engine
+Documentation=https://docs.docker.com
+After=network.target docker.socket
+Requires=docker.socket
+[Service]
+Type=notify
+ExecStart=/usr/bin/docker daemon -H fd:// --storage-driver=devicemapper --storage-opt=dm.thinpooldev=/dev/mapper/docker-thinpool --storage-opt=dm.use_deferred_removal=true
+MountFlags=slave
+LimitNOFILE=1048576
+LimitNPROC=1048576
+LimitCORE=infinity
+TimeoutStartSec=0
+Delegate=yes
+[Install]
+WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload		      
+    sudo rm -rf /var/lib/docker/network
+    sudo ip link del docker0
+    
+    sudo systemctl daemon-reload
+
+    set +e
+    sudo systemctl restart docker.service; sleep 5; sudo systemctl restart docker.service
+    set -e
 }
 
 
@@ -110,17 +216,20 @@ main() {
     system_prep
     fetch_rancherlabs_ssh_keys
 
-    osfamily=$(get_osfamily)
+    local osfamily
+    osfamily="$(get_osfamily)" || exit $?
+
     echo "Detected osfamily \'${osfamily}\'..."
 
-    # if [ 'redhat' == "${osfamily}" ]; then
-    # 	prep_for_redhat
-    # fi
-
-    docker_version=$(get_specified_docker_version)
+    local docker_version
+    docker_version="$(get_specified_docker_version)" || exit $?
     echo "Docker version \'${docker_version}\' specified..."
-
     docker_install "${docker_version}"
+
+    # if [ 'redhat' == "${osfamily}" ]; then
+    # 	echo 'Performing special RHEL storage config...'
+    # 	config_for_redhat
+    # fi
 }
 
 

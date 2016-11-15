@@ -2,10 +2,11 @@ import os
 
 from invoke import run, Failure
 from requests import ConnectionError, HTTPError
-
 from time import sleep
+from botocore.exceptions import ClientError
 
-from .. import log_debug, log_info, request_with_retries, os_to_settings, nuke_aws_keypair
+from .. import log_debug, log_info, request_with_retries, os_to_settings, nuke_aws_keypair, provision_aws_volume
+from .. import deprovision_aws_volume
 from ..DockerMachine import DockerMachine, DockerMachineError
 
 
@@ -29,6 +30,7 @@ class RancherServer(object):
                                     'AWS_SUBNET_ID',
                                     'AWS_SECURITY_GROUP',
                                     'AWS_ZONE',
+                                    'AWS_INSTANCE_PROFILE',
                                     'RANCHER_SERVER_OPERATINGSYSTEM',
                                     'RANCHER_VERSION',
                                     'RANCHER_DOCKER_VERSION',
@@ -102,8 +104,10 @@ class RancherServer(object):
 
         #
         def deprovision(self):
+                server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
+
                 log_info("Deprovisioning Rancher Server via Docker Machine...")
-                # be polite
+
                 try:
                         DockerMachine().rm(self.name())
 
@@ -118,10 +122,16 @@ class RancherServer(object):
                         log_info("Removing any AWS keypairs for node '{}'...".format(self.name()))
                         nuke_aws_keypair(self.name())
 
-                except (RancherServerError, RuntimeError) as e:
-                        msg = "Failed to deprovision!: {}".format(str(e))
-                        log_debug(msg)
-                        raise RancherServerError(msg) from e
+                        if 'rhel' in server_os or 'centos' in server_os:
+                                deprovision_aws_volume("{}-docker".format(self.name()))
+
+                except (ClientError, RancherServerError, RuntimeError) as e:
+                        if 'ClientError' is type(e).__name__:
+                                pass
+                        else:
+                                msg = "Failed to deprovision!: {}".format(str(e))
+                                log_debug(msg)
+                                raise RancherServerError(msg) from e
 
                 return True
 
@@ -148,8 +158,17 @@ class RancherServer(object):
                         user = settings['ssh_username']
                         docker_version = os.environ['RANCHER_DOCKER_VERSION']
                         rancher_version = os.environ['RANCHER_VERSION']
-                        safety_sleep = 60
-                        puppet_path = ''
+                        region = os.environ['AWS_DEFAULT_REGION']
+                        az = os.environ['AWS_ZONE']
+                        puppet_path = None
+                        addtl_volume_id = None
+
+                        # redhat osfamily needs some volume adjustments
+                        if 'rhel' in server_os or 'centos' in server_os:
+                                addtl_vol_name = "{}-docker".format(self.name())
+                                addtl_volume_id = provision_aws_volume(
+                                        name=addtl_vol_name, region=region, zone=az, tags=os.environ['AWS_TAGS'])
+                                os.environ['AWS_TAGS'] = os.environ['AWS_TAGS'] + ",{},{}".format('rancherlabs.ci.addtl_volume', str(addtl_volume_id))
 
                         os.environ['AWS_INSTANCE_TYPE'] = os.environ['RANCHER_SERVER_AWS_INSTANCE_TYPE']
 
@@ -160,7 +179,7 @@ class RancherServer(object):
 
                         log_info("Rancher Server node is available for SSH at \'{}\'...".format(self.IP()))
 
-                        if 'redhat' in server_os or 'centos' in server_os:
+                        if 'rhel' in server_os or 'centos' in server_os:
                                 DockerMachine().ssh(self.name(), 'sudo yum install -y wget')
 
                         self.__add_ssh_keys()
@@ -189,8 +208,7 @@ class RancherServer(object):
         #
         def __add_ssh_keys(self):
                 log_info("Populating {} with Rancher Labs ssh keys...".format(self.name()))
-                ssh_key_urls = ['https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci',
-                                'https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/osmatrix']
+                ssh_key_urls = ['https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci']
                 server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
                 settings = os_to_settings(server_os)
                 ssh_username = settings['ssh_username']
