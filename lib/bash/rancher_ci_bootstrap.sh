@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # send all stdout & stderr to rancherci-bootstrap.log
 exec > /tmp/rancherci-bootstrap.log
@@ -55,57 +55,6 @@ system_prep() {
 	    sudo apt-get update && apt-get install -y jq awscli wget
 	    ;;
     esac
-}
-
-
-###############################################################################
-# get the AWS region
-###############################################################################
-aws_region() {
-    local region
-
-    region="$(ec2metadata -z | cut -f2 -d' ' | sed -e 's/.$//g')" || exit $?
-
-    if [ -z "${region}" ]; then
-	echo 'Falied to query AWS region!'
-	exit -1
-    fi
-    echo "${region}"
-}
-
-
-###############################################################################
-# get the volid for extra volumes (redhat osfamily)
-###############################################################################
-aws_instance_id() {
-    local instance_id
-
-    instance_id="$(ec2metadata --instance-id | cut -f2 -d' ')" || exit $?
-
-    if [ -z "${instance_id}" ]; then
-	echo 'Failed to query AWS instance-id!'
-	exit -1
-    fi
-    echo "${instance_id}"
-}
-
-###############################################################################
-# get the volid for extra volumes (redhat osfamily)
-###############################################################################
-aws_addtl_volid() {
-    local instance_id
-    local vol_id
-
-    instance_id="$(aws_instance_id)" || exit $?
-    vol_id="$(aws ec2 --region us-west-2 describe-tags --filter Name=resource-id,Values="${instance_id}" --out=json | \
-			 jq '.Tags[]| select(.Key == "rancherlabs.ci.addtl_volume")|.Value' | \
-			 sed -e 's/\"//g')" || exit $?
-
-    if [ -z "${vol_id}" ]; then
-	echo 'Failed to query secondary volid from AWS.'
-	exit 1
-    fi
-    echo "${vol_id}"
 }
 
 
@@ -226,10 +175,10 @@ main() {
     echo "Docker version \'${docker_version}\' specified..."
     docker_install "${docker_version}"
 
-    # if [ 'redhat' == "${osfamily}" ]; then
-    # 	echo 'Performing special RHEL storage config...'
-    # 	config_for_redhat
-    # fi
+    if [ 'redhat' == "${osfamily}" ]; then
+	echo 'Performing special RHEL storage config...'
+	config_for_redhat
+    fi
 }
 
 

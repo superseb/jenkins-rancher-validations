@@ -120,6 +120,14 @@ class RancherAgents(object):
                                 log_info(msg)
                 return True
 
+        #
+        def __compute_tags(self):
+                tags = os.environ['AWS_TAGS']
+                tags += ",rancher.ci.docker.version,{}".format(os.environ['RANCHER_DOCKER_VERSION'])
+                tags += ",rancher.ci.docker.install_url,{}".format(self.__get_docker_install_url())
+                return tags
+
+        #
         def __provision_via_rancher_api(self):
                 provision_url = "http://{}:8080/v2-beta/projects/1a5/host".format(RancherServer().IP())
                 agent_os = os.environ['RANCHER_AGENT_OPERATINGSYSTEM']
@@ -137,18 +145,6 @@ class RancherAgents(object):
                 provisioning_attempts = 0
                 for agent_name in self.__get_agent_names(10):
 
-                        # redhat OS family needs a lot of custom setup
-                        if 'rhel' in agent_os or 'centos' in agent_os:
-                                addtl_vol_name = "{}-docker".format(agent_name)
-                                addtl_volume_id = provision_aws_volume(
-                                        name=addtl_vol_name,
-                                        tags=os.environ['AWS_TAGS'],
-                                        size=40)
-
-                                tags = os.environ['AWS_TAGS'] + ",rancherlabs.ci.addtl_volume,{},rancher.docker.version,{}".format(
-                                        addtl_volume_id,
-                                        docker_version)
-
                         amazonec2_config = {
                                 'type': 'amazonec2Config',
                                 'accessKey': os.environ['AWS_ACCESS_KEY_ID'],
@@ -160,7 +156,7 @@ class RancherAgents(object):
                                 'securityGroup': os.environ['AWS_SECURITY_GROUP'],
                                 'sshUser': os_settings['ssh_username'],
                                 'subnetId': os.environ['AWS_SUBNET_ID'],
-                                'tags': tags,
+                                'tags': self.__compute_tags(),
                                 'vpcId': os.environ['AWS_VPC_ID'],
                                 'zone': os.environ['AWS_ZONE'],
                                 'iamInstanceProfile': os.environ['AWS_INSTANCE_PROFILE'],
