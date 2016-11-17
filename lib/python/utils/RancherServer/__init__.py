@@ -156,37 +156,44 @@ class RancherServer(object):
                         server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
                         settings = os_to_settings(server_os)
                         user = settings['ssh_username']
-                        docker_version = os.environ['RANCHER_DOCKER_VERSION']
                         rancher_version = os.environ['RANCHER_VERSION']
                         region = os.environ['AWS_DEFAULT_REGION']
                         az = os.environ['AWS_ZONE']
                         puppet_path = None
                         addtl_volume_id = None
+                        tags = os.environ['AWS_TAGS']
+                        docker_version = os.environ['RANCHER_DOCKER_VERSION']
 
-                        # redhat osfamily needs some volume adjustments
+                        tags += ",rancher.docker.version,{}".format(docker_version)
+
+                        os.environ['AWS_INSTANCE_TYPE'] = os.environ['RANCHER_SERVER_AWS_INSTANCE_TYPE']
+
+                        # RHEL/CentOS needs an additional volume
                         if 'rhel' in server_os or 'centos' in server_os:
                                 addtl_vol_name = "{}-docker".format(self.name())
                                 addtl_volume_id = provision_aws_volume(
-                                        name=addtl_vol_name, region=region, zone=az, tags=os.environ['AWS_TAGS'])
-                                os.environ['AWS_TAGS'] = os.environ['AWS_TAGS'] + ",{},{}".format('rancherlabs.ci.addtl_volume', str(addtl_volume_id))
-
-                        os.environ['AWS_INSTANCE_TYPE'] = os.environ['RANCHER_SERVER_AWS_INSTANCE_TYPE']
+                                        name=addtl_vol_name,
+                                        region=region,
+                                        zone=az,
+                                        tags=os.environ['AWS_TAGS'])
+                                tags += ",rancherlabs.ci.addtl_volid,{}".format(addtl_volume_id)
 
                         # Create the node with Docker Machine because it does a good job of settings up the TLS
                         # stuff but we are going to remove the packages and install our specified version over top
                         # of the old /etc/docker.
-                        DockerMachine().create(self.name())
+                        log_info("Creating Rancher server...")
+                        DockerMachine().create(self.name(), tags=tags)
 
+                        # place the ssh pub keys asap for debugging
+                        self.__add_ssh_keys()
                         log_info("Rancher Server node is available for SSH at \'{}\'...".format(self.IP()))
 
-                        if 'rhel' in server_os or 'centos' in server_os:
-                                DockerMachine().ssh(self.name(), 'sudo yum install -y wget')
-
-                        self.__add_ssh_keys()
-
-                        #
-                        log_info("Starting Rancher server...")
                         DockerMachine().ssh(self.name(), '\'echo "usermod -a -G docker $USER" | sudo -E -s\'')
+
+                        # RHEL/CentOS needs additional Docker storage configs
+                        DockerMachine().scp(self.name(), './lib/bash/rancher_ci_bootstrap.sh', '/tmp/')
+                        DockerMachine().ssh(self.name(), '\'chmod +x /tmp/rancher_ci_bootstrap.sh && /tmp/rancher_ci_bootstrap.sh\'')
+
                         DockerMachine().ssh(
                                 self.name(), "docker run -d --restart=always --name=rancher_server_{} -p 8080:8080 rancher/server:{}".format(
                                         rancher_version,
@@ -208,11 +215,15 @@ class RancherServer(object):
         #
         def __add_ssh_keys(self):
                 log_info("Populating {} with Rancher Labs ssh keys...".format(self.name()))
+
                 ssh_key_urls = ['https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci']
                 server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
                 settings = os_to_settings(server_os)
                 ssh_username = settings['ssh_username']
                 ssh_auth = "~/.ssh/authorized_keys"
+
+                if 'rhel' in server_os or 'centos' in server_os:
+                        DockerMachine().ssh(self.name(), 'sudo yum install -y wget')
 
                 for keyset in ssh_key_urls:
                         try:
@@ -228,6 +239,7 @@ class RancherServer(object):
         #
         def __set_reg_token(self):
                 log_info("Setting the initial agent reg token...")
+
                 reg_url = "http://{}:8080/v2-beta/projects/1a5/registrationtokens".format(self.IP())
                 try:
                         response = request_with_retries('POST', reg_url, step=20, attempts=20)
@@ -243,6 +255,7 @@ class RancherServer(object):
         #
         def __set_reg_url(self):
                 log_info("Setting the agent registration URL...")
+
                 reg_url = "http://{}:8080/v2-beta/settings/api.host".format(self.IP())
                 try:
                         request_data = {

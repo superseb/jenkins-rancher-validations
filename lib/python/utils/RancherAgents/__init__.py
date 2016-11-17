@@ -124,7 +124,6 @@ class RancherAgents(object):
         def __compute_tags(self):
                 tags = os.environ['AWS_TAGS']
                 tags += ",rancher.ci.docker.version,{}".format(os.environ['RANCHER_DOCKER_VERSION'])
-                tags += ",rancher.ci.docker.install_url,{}".format(self.__get_docker_install_url())
                 return tags
 
         #
@@ -132,7 +131,6 @@ class RancherAgents(object):
                 provision_url = "http://{}:8080/v2-beta/projects/1a5/host".format(RancherServer().IP())
                 agent_os = os.environ['RANCHER_AGENT_OPERATINGSYSTEM']
                 os_settings = os_to_settings(agent_os)
-                docker_version = os.environ['RANCHER_DOCKER_VERSION']
 
                 # CoreOS is a bit of an oddball about root storage device name
                 if 'coreos' in agent_os:
@@ -164,12 +162,23 @@ class RancherAgents(object):
 
                         payload = {
                                 'type': 'machine',
-                                'engineInstallUrl': "https://releases.rancher.com/install-docker/{}.sh".format(docker_version),
+                                'engineInstallUrl': 'https://raw.githubusercontent.com/nrvale0/jenkins-rancher-validations/stable/lib/bash/rancher_ci_bootstrap.sh',
                                 'amazonec2Config': amazonec2_config,
                                 'hostname': agent_name,
                         }
 
                         try:
+                                if 'rhel' in agent_os or 'centos' in agent_os:
+                                        tags = os.environ['AWS_TAGS']
+                                        addtl_vol_id = provision_aws_volume(
+                                                name="{}-docker".format(agent_name),
+                                                region=os.environ['AWS_DEFAULT_REGION'],
+                                                zone=os.environ['AWS_ZONE'],
+                                                tags=os.environ['AWS_TAGS'])
+                                        tags += ",rancherlabs.ci.addtl_volid,{}".format(addtl_vol_id)
+                                        payload['amazonec2Config']['tags'] = tags
+                                        payload['engineInstallUrl'] = 'https://raw.githubusercontent.com/nrvale0/jenkins-rancher-validations/stable/lib/bash/rancher_ci_bootstrap.sh'
+
                                 log_debug("Creating agent '{}' via Rancher REST API at {}...".format(agent_name, provision_url))
                                 log_debug("payload: {}".format(payload))
                                 provisioning_attempts += 1
@@ -204,93 +213,93 @@ class RancherAgents(object):
                 return True
 
         #
-        def provision_via_rancher_cli(self):
-                try:
-                        rancher_url = "http://{}:8080/v2-beta/schemas".format(RancherServer().IP())
-                        agent_os = os.environ['RANCHER_AGENT_OPERATINGSYSTEM']
-                        docker_version = os.environ['RANCHER_DOCKER_VERSION']
-                        count = 10
-                        engine_install_url = self.__get_docker_install_url()
-                        iam_profile = os.environ['AWS_INSTANCE_PROFILE']
+        # def provision_via_rancher_cli(self):
+        #         try:
+        #                 rancher_url = "http://{}:8080/v2-beta/schemas".format(RancherServer().IP())
+        #                 agent_os = os.environ['RANCHER_AGENT_OPERATINGSYSTEM']
+        #                 docker_version = os.environ['RANCHER_DOCKER_VERSION']
+        #                 count = 10
+        #                 engine_install_url = self.__get_docker_install_url()
+        #                 iam_profile = os.environ['AWS_INSTANCE_PROFILE']
 
-                        os.environ['AWS_INSTANCE_TYPE'] = os.environ['RANCHER_AGENT_AWS_INSTANCE_TYPE']
+        #                 os.environ['AWS_INSTANCE_TYPE'] = os.environ['RANCHER_AGENT_AWS_INSTANCE_TYPE']
 
-                        agents = self.__get_agent_names(count)
-                        log_info("Creating 3 Rancher Agent nodes via Rancher CLI...")
+        #                 agents = self.__get_agent_names(count)
+        #                 log_info("Creating 3 Rancher Agent nodes via Rancher CLI...")
 
-                        cmd = "rancher --wait host create --driver amazonec2 --engine-install-url {}.sh ".format(engine_install_url)
+        #                 cmd = "rancher --wait host create --driver amazonec2 --engine-install-url {}.sh ".format(engine_install_url)
 
-                        # Have to do some envvar translation between Rancher CLI and Docker Machine...
-                        aws_to_dm_env()
+        #                 # Have to do some envvar translation between Rancher CLI and Docker Machine...
+        #                 aws_to_dm_env()
 
-                        # CoreOS is a unique animal as it relatest to root devices...
-                        if 'coreos' in agent_os:
-                                cmd += "--amazonec2-device-name /dev/xvda "
+        #                 # CoreOS is a unique animal as it relatest to root devices...
+        #                 if 'coreos' in agent_os:
+        #                         cmd += "--amazonec2-device-name /dev/xvda "
 
-                                # Docker Machine AWS driver does not pick up the SG envvars(counter to current docs) so pass on cmdline...
-                                cmd += "--amazonec2-security-group {} ".format(os.environ['AWS_SECURITY_GROUP'])
+        #                         # Docker Machine AWS driver does not pick up the SG envvars(counter to current docs) so pass on cmdline...
+        #                         cmd += "--amazonec2-security-group {} ".format(os.environ['AWS_SECURITY_GROUP'])
 
-                                # ssh user has to be specified as it differs from OS to OS...
-                        settings = os_to_settings(os.environ['RANCHER_AGENT_OPERATINGSYSTEM'])
-                        cmd += "--amazonec2-ssh-user {} ".format(settings['ssh_username'])
-                        cmd += "--amazonec2-ami {} ".format(settings['ami-id'])
-                        cmd += "--amazonec2-retries 5 "
-                        cmd += "--amazonec2-iam-instance-profile {}".format(iam_profile)
-                        os.environ['RANCHER_URL'] = rancher_url
+        #                         # ssh user has to be specified as it differs from OS to OS...
+        #                 settings = os_to_settings(os.environ['RANCHER_AGENT_OPERATINGSYSTEM'])
+        #                 cmd += "--amazonec2-ssh-user {} ".format(settings['ssh_username'])
+        #                 cmd += "--amazonec2-ami {} ".format(settings['ami-id'])
+        #                 cmd += "--amazonec2-retries 5 "
+        #                 cmd += "--amazonec2-iam-instance-profile {}".format(iam_profile)
+        #                 os.environ['RANCHER_URL'] = rancher_url
 
-                        # AWS provisioning is unreliable so we'll keep trying up to $count attempts or until we get 3 successes
-                        provisioning_attempts = 0
-                        provisioning_success = 0
+        #                 # AWS provisioning is unreliable so we'll keep trying up to $count attempts or until we get 3 successes
+        #                 provisioning_attempts = 0
+        #                 provisioning_success = 0
 
-                        for agent in agents:
-                                provisioning_attempts += 1
-                                try:
-                                        ccmd = cmd + agent
-                                        log_debug("Creating agent \'{}\' via Rancher CLI...".format(agent))
-                                        run(ccmd, echo=True)
-                                        provisioning_success += 1
+        #                 for agent in agents:
+        #                         provisioning_attempts += 1
+        #                         try:
+        #                                 ccmd = cmd + agent
+        #                                 log_debug("Creating agent \'{}\' via Rancher CLI...".format(agent))
+        #                                 run(ccmd, echo=True)
+        #                                 provisioning_success += 1
 
-                                        # Yea! We win!
-                                        if 3 <= provisioning_success:
-                                                break
+        #                                 # Yea! We win!
+        #                                 if 3 <= provisioning_success:
+        #                                         break
 
-                                except Failure as e:
-                                        msg = "Failed while attempting to provision agent '{}'...".format(agent)
-                                        log_info(msg)
+        #                         except Failure as e:
+        #                                 msg = "Failed while attempting to provision agent '{}'...".format(agent)
+        #                                 log_info(msg)
 
-                                        if provisioning_attempts >= 10 and provisioning_success < 3:
-                                                msg = "Exceeded 10 attempts at node provisioning with < 3 successes!"
-                                                log_debug(msg)
-                                                raise RancherAgentsError(msg) from e
+        #                                 if provisioning_attempts >= 10 and provisioning_success < 3:
+        #                                         msg = "Exceeded 10 attempts at node provisioning with < 3 successes!"
+        #                                         log_debug(msg)
+        #                                         raise RancherAgentsError(msg) from e
 
-                        # We have 3 agents spun but we still have to wait for them to be operational...
-                        log_info("Waiting for 3 agents to be 'available' before proceeding...")
-                        self.__wait_on_active_agents(3)
+        #                 # We have 3 agents spun but we still have to wait for them to be operational...
+        #                 log_info("Waiting for 3 agents to be 'available' before proceeding...")
+        #                 self.__wait_on_active_agents(3)
 
-                        # Let's remove any agents which are listed as having errored on provisioning.
-                        log_info("Removing agents which failed to provision successfully...")
-                        cmd = "for host in $(rancher host ls | grep error | cut -f1 -d' '); do rancher rm -s $i; done"
-                        try:
-                                 run(cmd, echo=True)
-                        except Failure as e:
-                                 msg = "Failed to remove hosts which errored during provisioning!: {}".format(str(e))
-                                 raise RancherAgentsError(msg) from e
+        #                 # Let's remove any agents which are listed as having errored on provisioning.
+        #                 log_info("Removing agents which failed to provision successfully...")
+        #                 cmd = "for host in $(rancher host ls | grep error | cut -f1 -d' '); do rancher rm -s $i; done"
+        #                 try:
+        #                          run(cmd, echo=True)
+        #                 except Failure as e:
+        #                          msg = "Failed to remove hosts which errored during provisioning!: {}".format(str(e))
+        #                          raise RancherAgentsError(msg) from e
 
-                        # Before we do anything fancy with the Agents, let's get some SSH keys in place for debugging purposes.
-                        # self.__add_ssh_keys()
+        #                 # Before we do anything fancy with the Agents, let's get some SSH keys in place for debugging purposes.
+        #                 # self.__add_ssh_keys()
 
-                        # # Reinstall Docker to specified version
-                        # if 'coreos' in agent_os and 'rancheros' in agent_os:
-                        #         log_warn("Specifying DOCKER_VERSION has no effect if Agent OS is CoreOS or RancherOS!")
-                        # else:
-                        #         self.__reinstall_docker()
+        #                 # # Reinstall Docker to specified version
+        #                 # if 'coreos' in agent_os and 'rancheros' in agent_os:
+        #                 #         log_warn("Specifying DOCKER_VERSION has no effect if Agent OS is CoreOS or RancherOS!")
+        #                 # else:
+        #                 #         self.__reinstall_docker()
 
-                except (Failure, RancherAgentsError, RancherServerError) as e:
-                        msg = "Failed while provisioning agent!: {}".format(str(e))
-                        log_debug(msg)
-                        raise RancherAgentsError(msg) from e
+        #         except (Failure, RancherAgentsError, RancherServerError) as e:
+        #                 msg = "Failed while provisioning agent!: {}".format(str(e))
+        #                 log_debug(msg)
+        #                 raise RancherAgentsError(msg) from e
 
-                return True
+        #         return True
 
         #
         def provision(self):
