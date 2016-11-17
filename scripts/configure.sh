@@ -1,10 +1,10 @@
 #!/bin/bash
 
-set -eux
+set -eu
 
 DEBUG="${DEBUG:-false}"
 
-env | egrep '^(JENKINS_|RANCHER_|AWS_|DEBUG_|PIPELINE_).*\=.+' | sort > .env
+env | egrep '^(RANCHER_|AWS_|DEBUG_|DOCKER_).*\=.+' | sort > .env
 
 if [ "false" != "${DEBUG}" ]; then
     cat .env

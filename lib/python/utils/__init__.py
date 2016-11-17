@@ -1,4 +1,4 @@
-import os, sys, fnmatch, numpy, logging, yaml, inspect, requests, json, boto3
+import os, sys, fnmatch, numpy, logging, yaml, inspect, requests, boto3
 
 from plumbum import colors
 from invoke import run, Failure
@@ -90,29 +90,36 @@ def request_with_retries(method, url, data={}, step=10, attempts=10):
     response = None
     current_attempts = 0
 
-    log_info("Sending request \'{}\' \'{}\' with data \'{}\'...".format(method, url, data))
+    log_info("Sending request '{}' '{}'...".format(method, url))
+    log_debug("Payload data: {}".format(data))
 
     while True:
         try:
             current_attempts += 1
             if 'PUT' == method:
-                response = requests.put(url, data, timeout=timeout)
+                response = requests.put(url, timeout=timeout, json=data)
             elif 'GET' == method:
                 response = requests.get(url, timeout=timeout)
             elif 'POST' == method:
-                response = requests.post(url, timeout=timeout)
+                response = requests.post(url, timeout=timeout, json=data)
             else:
                 log_error("Unsupported method \'{}\' specified!".format(method))
                 return False
 
-            log_debug("Response: {} :: {}".format(response.status_code, json.loads(response.text)))
-            return True
+            log_info("response code: HTTP {}".format(response.status_code))
+            log_debug("response: Headers:: {}".format(response.headers))
+
+            # we might get a 200, 201, etc
+            if not str(response.status_code).startswith('2'):
+                response.raise_for_status()
+            else:
+                return True
 
         except (ConnectionError, HTTPError) as e:
             if current_attempts >= attempts:
-                msg = "Exceeded max attempts. Giving up!: {}".format(e.message)
+                msg = "Exceeded max attempts. Giving up!: {}".format(str(e))
                 log_debug(msg)
-                raise e
+                raise Failure(msg) from e
             else:
                 log_info("Request did not succeeed. Sleeping and trying again... : {}".format(str(e)))
                 sleep(step)
@@ -193,7 +200,8 @@ def os_to_settings(os):
         ssh_username = 'centos'
 
     elif 'rhel-7' in os:
-        ami = 'ami-99bef1a9'
+        ami = 'ami-6f68cf0f'
+#        ami = 'ami-99bef1a9'
         ssh_username = 'ec2-user'
 
     elif 'rancheros-v06' in os:
@@ -211,8 +219,139 @@ def os_to_settings(os):
 
 
 #
+def aws_ec2_tag_value(nodename, tagname):
+    log_debug("Looking up tag '{}' for instance '{}'...".format(tagname, nodename))
+
+    tagvalue = None
+
+    try:
+        ec2_filter = [{'Name': 'tag:Name', 'Values': [nodename]}]
+        log_debug("tag filter: {}".format(ec2_filter))
+
+        ec2 = boto3.client('ec2')
+        node_metadata = ec2.describe_instances(Filters=ec2_filter)
+        log_debug("node metadata: {}".format(node_metadata))
+        tags = node_metadata['Reservations'][0]['Instances'][0]['Tags']
+        log_debug("tags: {}".format(tags))
+
+        for tag in tags:
+            if tagname == tag['Key']:
+                tagvalue = tag['Value']
+                break
+
+    except (IndexError, KeyError, Boto3Error) as e:
+        msg = "Failed while looking up tag '{}'!: {}".format(tagname, str(e.args))
+        log_debug(msg)
+        raise RuntimeError(msg) from e
+
+    return tagvalue
+
+
+#
+def aws_instance_id_from_name(name):
+    iid = None
+
+    log_debug("Getting metadata for '{}'...".format(name))
+
+    try:
+        name_filter = [{
+            'Name': 'tag:Name',
+            'Values': name,
+        }]
+        ec2 = boto3.client('ec2')
+        iid = ec2.describe_instances(Filters=name_filter)['Reservations'][0]['Instances'][0]['InstanceId']
+    except Boto3Error as e:
+        msg = "Failed while querying instance-id for name '{}'! :: {}".format(name, e.message)
+        log_debug(msg)
+        raise RuntimeError(msg) from e
+
+    return iid
+
+
+#
+def aws_volid_from_tag(name):
+    log_debug("Getting volid for non-root volume on instance '{}'...".format(name))
+
+    volid = None
+
+    try:
+        volid = aws_ec2_tag_value(name, 'rancherlabs.ci.addtl_volume')
+    except RuntimeError as e:
+        msg = "Failed to get volid for non-root volume!: {}".format(str(e))
+        log_debug(msg)
+        raise RuntimeError(msg) from e
+
+    return volid
+
+
+#
+def deprovision_aws_volume(name, region='us-west-2', zone='a'):
+    log_info("Removing volume '{}' if  it exists...".format(name))
+
+    try:
+        vol_filter = [{'Name': 'tag:Name', 'Values': [name]}]
+        log_debug("vol filter: {}".format(vol_filter))
+        ec2 = boto3.client('ec2')
+        vols = ec2.describe_volumes(Filters=vol_filter)
+        log_debug("Volumes to delete: {}".format(vols))
+
+        if 0 != len(vols['Volumes']):
+            for vol in range(0, len(vols['Volumes'])):
+                volid = vols['Volumes'][vol]['VolumeId']
+                log_debug("Deleteting vol [{}] : id '{}'...".format(vol, volid))
+                ec2.delete_volume(VolumeId=volid)
+
+    except Boto3Error as e:
+        msg = "Failed deprovisioning EBS volume..."
+        log_debug(msg)
+        raise RuntimeError(msg) from e
+
+    return True
+
+
+#
+def provision_aws_volume(name, region='us-west-2', zone='a', size=20, voltype='gp2', tags='is_ci,true'):
+    log_info("Creating EBS volume...")
+
+    try:
+        ec2 = boto3.resource('ec2', region_name=region)
+        vol = ec2.create_volume(Size=size, VolumeType=voltype, AvailabilityZone="{}{}".format(region, zone))
+        log_info("EBS volume '{}' created...".format(str(vol.id)))
+
+        # tag the volume for easier auditing
+        tag_dict_list = []
+        tags += ",Name,{}".format(name)
+        tag_list = tags.split(',')
+        tag_list.reverse()
+
+        # ugly input validation
+        if 0 != len(tag_list) % 2:
+            msg = "AWS_TAGS split on ',' has length {} which makes no sense!".format(str(len(tag_list)))
+            log_debug(msg)
+            raise RuntimeError(msg)
+
+        while 0 != len(tag_list):
+            tag_dict = {'Key': str(tag_list.pop()), 'Value': str(tag_list.pop())}
+            tag_dict_list.append(tag_dict)
+
+        log_info("Tagging volume '{}' : '{}'...".format(str(vol.id), tag_dict_list))
+        ec2.create_tags(Resources=[vol.id], Tags=tag_dict_list)
+
+    except Boto3Error as e:
+        msg = "Failed while provisioning EBS volme!: {}".format(e.message)
+        log_debug(msg)
+        raise RuntimeError(msg) from e
+
+    return vol.id
+
+
+#
 def aws_to_dm_env():
     log_debug('Performing envvar translation from AWS to Docker Machine...')
+
+    # inject some EC2 tags we're going to need later
+    docker_version_tag = "rancher.docker.version,{}".format(os.environ['RANCHER_DOCKER_VERSION'])
+    os.environ['AWS_TAGS'] = "{},{}".format(os.environ['AWS_TAGS'], docker_version_tag)
 
     aws_params = {k: v for k, v in os.environ.items() if k.startswith('AWS')}
     for k, v in aws_params.items():
@@ -269,7 +408,7 @@ def find_files(rootdir, pattern, excludes=[]):
 #
 def lint_check(rootdir, filetypes=[], excludes=[]):
 
-    default_filetypes = ['py', 'pp']
+    default_filetypes = ['py', 'pp', 'rb']
     result = True
 
     # if someone passes a non-list then cast it to a list
@@ -303,13 +442,16 @@ def lint_check(rootdir, filetypes=[], excludes=[]):
                 cmd = ''
                 if '*.py' == filetype:
                     cmd = "flake8 --statistics --show-source --max-line-length=160 --ignore={} {}".format(
-                        'E111,E114,E122,E401,E402,E266,F841,E126',
+                        'E111,E114,E122,E401,E402,E266,F841,E126,E501',
                         ' '.join(found_files))
 
                 elif '*.pp' == filetype:
-                    cmd = "puppet-lint {}".join(' '.join(found_files))
+                    cmd = "puppet-lint {}".format(' '.join(found_files))
 
-                cmd = cmd.format(' '.join(found_files))
+                elif '*.rb' == filetype:
+                    cmd = "ruby-lint {}".format(' '.join(found_files))
+
+#                cmd = cmd.format(' '.join(found_files))
                 log_debug("Lint checking \'{}\'...".format(' '.join(found_files)))
                 if is_debug_enabled():
                     run(cmd, echo=True)
@@ -322,7 +464,7 @@ def lint_check(rootdir, filetypes=[], excludes=[]):
 #
 def syntax_check(rootdir, filetypes=[], excludes=[]):
 
-    default_filetypes = ['sh', 'py', 'yaml', 'pp']
+    default_filetypes = ['sh', 'py', 'yaml', 'pp', 'rb']
     result = True
 
     # if someone passes a non-list then cast it to a list
@@ -362,6 +504,9 @@ def syntax_check(rootdir, filetypes=[], excludes=[]):
 
                     elif '*.pp' == filetype:
                         cmd = "puppet parser validate {}"
+
+                    elif '*.rb' == filetype:
+                        cmd = "ruby -c {}"
 
                     # do the syntax check
                     if '*.yaml' == filetype or '*.yaml' == filetype:
