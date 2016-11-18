@@ -3,7 +3,7 @@ from invoke import run, Failure
 from time import sleep, time
 from requests import ConnectionError, HTTPError
 
-from .. import log_info, log_debug, os_to_settings, aws_to_dm_env, nuke_aws_keypair, request_with_retries
+from .. import log_info, log_debug, os_to_settings, nuke_aws_keypair, request_with_retries
 from .. import provision_aws_volume, deprovision_aws_volume
 from ..RancherServer import RancherServer, RancherServerError
 
@@ -123,7 +123,7 @@ class RancherAgents(object):
         #
         def __compute_tags(self):
                 tags = os.environ['AWS_TAGS']
-                tags += ",rancher.ci.docker.version,{}".format(os.environ['RANCHER_DOCKER_VERSION'])
+                tags += ",rancher.docker.version,{}".format(os.environ['RANCHER_DOCKER_VERSION'])
                 return tags
 
         #
@@ -162,14 +162,14 @@ class RancherAgents(object):
 
                         payload = {
                                 'type': 'machine',
-                                'engineInstallUrl': 'https://raw.githubusercontent.com/nrvale0/jenkins-rancher-validations/stable/lib/bash/rancher_ci_bootstrap.sh',
+                                'engineInstallUrl': 'https://raw.githubusercontent.com/nrvale0/jenkins-rancher-validations/stable/lib/bash/docker_version_from_aws_tag.sh',
                                 'amazonec2Config': amazonec2_config,
                                 'hostname': agent_name,
                         }
 
                         try:
                                 if 'rhel' in agent_os or 'centos' in agent_os:
-                                        tags = os.environ['AWS_TAGS']
+                                        tags = self.__compute_tags()
                                         addtl_vol_id = provision_aws_volume(
                                                 name="{}-docker".format(agent_name),
                                                 region=os.environ['AWS_DEFAULT_REGION'],
@@ -177,7 +177,6 @@ class RancherAgents(object):
                                                 tags=os.environ['AWS_TAGS'])
                                         tags += ",rancherlabs.ci.addtl_volid,{}".format(addtl_vol_id)
                                         payload['amazonec2Config']['tags'] = tags
-                                        payload['engineInstallUrl'] = 'https://raw.githubusercontent.com/nrvale0/jenkins-rancher-validations/stable/lib/bash/rancher_ci_bootstrap.sh'
 
                                 log_debug("Creating agent '{}' via Rancher REST API at {}...".format(agent_name, provision_url))
                                 log_debug("payload: {}".format(payload))
@@ -209,6 +208,10 @@ class RancherAgents(object):
                                         raise RancherAgentsError(msg) from e
                                 else:
                                         log_info("Will provision additional agent nodes...")
+
+                if 'rhel' in agent_os or 'centos' in agent_os:
+                        log_info("Sleeping for 5 minutes while Waiting for osfamily 'redhat' nodes to transition to Docker LVM thinpool config...")
+                        sleep(300)
 
                 return True
 

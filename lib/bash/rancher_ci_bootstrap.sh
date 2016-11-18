@@ -97,7 +97,7 @@ main() {
     system_prep
 
     # pull down some utilities
-    wget https://raw.githubusercontent.com/nrvale0/jenkins-rancher-validations/stable/lib/bash/rancher-ci-bootstrap-common.sh -O /tmp/common.sh
+    wget https://raw.githubusercontent.com/nrvale0/jenkins-rancher-validations/stable/lib/bash/rancher_ci_bootstrap_common.sh -O /tmp/common.sh
     . /tmp/common.sh
 
     fetch_rancherlabs_ssh_keys

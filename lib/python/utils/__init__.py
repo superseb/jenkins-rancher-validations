@@ -315,6 +315,7 @@ def provision_aws_volume(name, region='us-west-2', zone='a', size=20, voltype='g
 
     try:
         ec2 = boto3.resource('ec2', region_name=region)
+        log_debug("Creating EBS volume '{}'...".format(name))
         vol = ec2.create_volume(Size=size, VolumeType=voltype, AvailabilityZone="{}{}".format(region, zone))
         log_info("EBS volume '{}' created...".format(str(vol.id)))
 

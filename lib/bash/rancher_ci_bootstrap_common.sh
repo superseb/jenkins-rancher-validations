@@ -40,6 +40,22 @@ aws_prep() {
 
 
 ###############################################################################
+# get the AWS node name
+###############################################################################
+ec2_node_name() {
+    local nodename
+
+    nodename="$(ec2metadata | egrep keyname | cut -f2 -d':')" || exit $?
+
+    if [ -z "${nodename}" ]; then
+	echo 'Failed to query EC2 node name!'
+	exit -1
+    fi
+    echo "${nodename}"
+}
+
+
+###############################################################################
 # get the AWS region
 ###############################################################################
 aws_region() {
@@ -48,7 +64,7 @@ aws_region() {
     region="$(ec2metadata -z | cut -f2 -d' ' | sed -e 's/.$//g')" || exit $?
 
     if [ -z "${region}" ]; then
-	echo 'Falied to query AWS region!'
+	echo 'Failed to query AWS region!'
 	exit -1
     fi
     echo "${region}"
@@ -145,18 +161,18 @@ class { ::docker:
 }
 PUPPET
 
-  set +e; sudo puppet apply --verbose --detailed-exitcodes /tmp/docker_config.pp; set -e
-  sudo puppet apply --verbose --detailed-exitcodes /tmp/docker_config.pp
+    set +e
+    sudo puppet apply --verbose --detailed-exitcodes /tmp/docker_config.pp; 
+    sudo puppet apply --verbose --detailed-exitcodes /tmp/docker_config.pp
+    set -e
 
-  sudo systemctl daemon-reload # just in case
+    sudo systemctl daemon-reload # just in case
 
-  set +e ; sudo systemctl stop docker.service
-  sleep 5
-  set -e
+    set +e ; sudo systemctl stop docker.service ; sleep 5; set -e
 
-  sudo rm -rf /var/lib/docker/network
-  sudo ip link del docker0
-  sudo systemctl start docker
+    sudo rm -rf /var/lib/docker/network
+    sudo ip link del docker0
+    sudo systemctl start docker
 }
 
 
