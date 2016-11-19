@@ -1,8 +1,9 @@
-import os
+import os, boto3
 
 from invoke import run, Failure
 from requests import ConnectionError, HTTPError
 from time import sleep
+from boto3.exceptions import Boto3Error
 from botocore.exceptions import ClientError
 
 from .. import log_debug, log_info, request_with_retries, os_to_settings, nuke_aws_keypair, provision_aws_volume
@@ -147,11 +148,56 @@ class RancherServer(object):
                         msg = "Timed out waiting for API provider to become available!: {}".format(e.message)
                         log_debug(msg)
                         raise RancherServerError(msg) from e
-
                 return True
 
         #
-        def provision(self):
+        def __ensure_ssh_keypair(self):
+                log_debug('Ensuring an ssh keypair exists...')
+
+                try:
+                        if not os.path.isfile('.ssh/{}'.format(self.name)):
+                                run('mkdir -p .ssh && rm -rf .ssh/{}'.format(self.name()))
+                                run("ssh-keygen -N '' -C '{}' -f .ssh/{}".format(self.name(), self.name()))
+                                run("chmod 0600 .ssh/{}".format(self.name()))
+
+                                keypair = {
+                                        'name': self.name(),
+
+                                }
+
+                except Failure) as e:
+                        msg = "Failed while ensuring ssh keypair!: {}".format(str(e))
+                        log_debug(msg)
+                        raise RancherServerError(msg) from e
+
+        #
+        def __create_server_node(self):
+                pass
+
+        #
+        def __install_docker(self):
+                pass
+
+        def __install_rancher_server(self):
+                pass
+
+        #
+        def __provision_via_terraform(self):
+                # create + upload keypair for this job
+                self.__ensure_ssh_keypair()
+                sy.exit()
+
+                # create server instance
+                self.__create_server_node()
+
+                # install the requested docker version
+                self.__install_docker()
+
+                # install rancher/server
+                self.__install_rancher_server()
+
+        #
+        def __provisision_via_docker_machine(self):
                 try:
                         server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
                         settings = os_to_settings(server_os)
@@ -211,6 +257,10 @@ class RancherServer(object):
                         raise RancherServerError(msg) from e
 
                 return True
+
+        #
+        def provision(self):
+                self.__provision_via_terraform()
 
         #
         def __add_ssh_keys(self):
