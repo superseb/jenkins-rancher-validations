@@ -1,4 +1,4 @@
-import os, sys, boto3, base64
+import os, boto3, base64
 
 from invoke import run, Failure
 from requests import ConnectionError, HTTPError
@@ -6,7 +6,7 @@ from time import sleep
 from boto3.exceptions import Boto3Error
 from botocore.exceptions import ClientError
 
-from .. import log_debug, log_info, request_with_retries
+from .. import log_debug, log_info, log_warn, request_with_retries, tag_csv_to_array, os_to_settings
 from .. import ebs_provision_volume, ebs_deprovision_volume, nuke_aws_keypair
 from ..PuppetApply import PuppetApply, PuppetApplyError
 
@@ -29,7 +29,7 @@ class RancherServer(object):
                                     'AWS_TAGS',
                                     'AWS_VPC_ID',
                                     'AWS_SUBNET_ID',
-                                    'AWS_SECURITY_GROUP',
+                                    'AWS_SECURITY_GROUP_ID',
                                     'AWS_ZONE',
                                     'AWS_INSTANCE_PROFILE',
                                     'RANCHER_SERVER_OPERATINGSYSTEM',
@@ -158,20 +158,23 @@ class RancherServer(object):
                         ec2 = boto3.client('ec2', region_name=str(os.environ['AWS_DEFAULT_REGION']).rstrip())
                         ec2.delete_key_pair(KeyName=self.name())
 
-                        pubkey = open('.ssh/{}.pub'.format(self.name()), 'rb').read()
+                        pubkey = open('.ssh/{}.pub'.format(self.name()), 'r').read()
                         log_debug("pub key: '{}'".format(pubkey))
 
-                        b64pubkey = base64.b64encode(pubkey)
-                        log_debug("base64 pub key: '{}'".format(b64pubkey))
+                         # WTF??!? Docs say this has to b64 encoded!?!?
+#                        b64pubkey = base64.b64encode(bytes(pubkey, 'utf-8').ascii())
+#                        log_debug("base64 pub key: '{}'".format(b64pubkey))
 
                         ec2.import_key_pair(
                                 KeyName=self.name(),
-                                PublicKeyMaterial=b64pubkey)
+                                PublicKeyMaterial=pubkey)
 
                 except (Failure, Boto3Error) as e:
                         msg = "Failed while ensuring ssh keypair!: {}".format(str(e))
                         log_debug(msg)
                         raise RancherServerError(msg) from e
+
+                return self.name()
 
         #
         def __compute_tags(self):
@@ -181,35 +184,70 @@ class RancherServer(object):
                         ',rancher.docker.version,{}'.format(str(os.environ['RANCHER_DOCKER_VERSION']).rstrip())
 
         #
-        def __provision_via_puppet(self):
+        def __ensure_rancher_server(self):
+                log_info("Ensuring Ransher Server node '{}'...".format(self.name()))
+
+                node_filter = [{'Name': 'tag:Name', 'Values': [self.name()]}]
+
                 try:
-                        tags = self.__compute_tags()
-                        server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+                        ec2 = boto3.client('ec2', region_name=str(os.environ['AWS_DEFAULT_REGION']).rstrip())
+                        instances = ec2.describe_instances(Filters=node_filter)
+                        log_debug("instance: {}".format(instances))
 
-                        # if we are provisioning RHEL or CentOS we have to:
-                        # 1) create a second EBS volume which will host an LVM thinpool
-                        # 2) tag the EC2 instance with the new volid so late provisioning scripts can find it
-                        if 'rhel' in server_os or 'centos' in server_os:
-                                addtl_volid = ebs_provision_volume(
-                                        "{}-docker".format(self.name()),
-                                        region=str(os.environ['AWS_DEFAULT_REGION']).rstrip(),
-                                        zone=str(os.environ['AWS_ZONE']).rstrip(),
-                                        tags=tags)
-                                tags += ',rancherlabs.ci.addtl_volid,{}'.format(addtl_volid)
+                        if 0 != len(instances['Reservations']):
+                                log_debug("Detected instance by name of '{]'...".format(self.name()))
 
+                        elif len(instances['Reservations']) > 1:
+                                log_warn("Found multiple instances with name '{}'! This is almost certainly a problem.".format(self.name()))
+                                log_warn("instance info: {}".format(str(instances['Reservations'])))
 
-                        data = {'rancher_infra::ci::validation_tests::aws::addtl_tags': tags }
-                        PuppetApply(data, 'aws.pp')
+                        else:
+                                keyname = self.__ensure_ssh_keypair()
 
-                except PuppetApplyError as e:
-                        msg = "Failed during provision of AWS network!: {}".format(str(e))
+                                server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+                                os_settings = os_to_settings(server_os)
+                                sgids = [str(os.environ['AWS_SECURITY_GROUP_ID']).rstrip()]
+                                instance_type = str(os.environ['RANCHER_SERVER_AWS_INSTANCE_TYPE']).rstrip()
+                                zone=str(os.environ['AWS_ZONE']).rstrip()
+                                region=str(os.environ['AWS_DEFAULT_REGION']).rstrip()
+
+                                placement = {
+                                        'AvailabilityZone': '{}{}'.format(region, zone),
+                                        'GroupName': '{}'.format(sgids)
+                                }
+
+                                network_ifs = [{'AssociatePublicIPAddress': True}]
+                                subnetid = str(os.environ['AWS_SECURITY_GROUP']).rstrip()
+                                iam_profile = str(os.environ['AWS_INSTANCE_PROFILE']).rstrip()
+                                tags = tag_csv_to_array(str(os.environ['AWS_TAGS']))
+
+                                # FIXME: take into account RHEL volumes and CoreOS root volume!
+                                ec2 = boto3.resource('ec2', region_name=(os.environ['AWS_DEFAULT_REGION']).rstrip())
+                                instance = ec2.create_instances(
+                                        ImageId=os_settings['ami-id'],
+                                        MinCount=1,
+                                        MaxCount=1,
+                                        KeyName=keyname,
+                                        SecurityGroupIds=sgids,
+                                        InstanceType=instance_type,
+                                        Placement=placement
+                                )
+
+                                # creat tags here
+                                ec2.create_tags(
+                                        Resources=node_filter,
+                                        Tags=tag_csv_to_array(tags))
+
+                except Boto3Error as e:
+                        msg = 'Failed while ensuring Rancher Server node!: {}'.format(str(e))
                         log_debug(msg)
-                        raise RancherServerError(msg) from e
+                        raise RancherServer(msg)
+
+                return True
 
         #
         def provision(self):
-                self.__ensure_ssh_keypair()
-                self.__provision_via_puppet()
+                self.__ensure_rancher_server()
 
         #
         def __set_reg_token(self):

@@ -1,7 +1,7 @@
 import os
 from invoke import run, Failure
 
-from .. import log_debug
+from .. import log_debug, err_and_exit
 
 
 class PuppetApplyError(RuntimeError):

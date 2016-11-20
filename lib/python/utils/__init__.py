@@ -323,7 +323,7 @@ def tag_csv_to_array(tagcsv):
         raise RuntimeError(msg)
 
     while 0 != len(taglist):
-        tag_dict = {'Key': str(taglist.pop()), 'Value': str(taglist.pop()) }
+        tag_dict = {'Key': str(taglist.pop()), 'Value': str(taglist.pop())}
         tag_dict_list.append(tag_dict)
 
     return tag_dict_list
