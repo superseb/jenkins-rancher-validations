@@ -1,4 +1,4 @@
-import os, sys, fnmatch, numpy, logging, yaml, inspect, requests, boto3
+import os, sys, fnmatch, numpy, logging, yaml, inspect, requests, boto3, time
 
 from plumbum import colors
 from invoke import run, Failure
@@ -11,6 +11,23 @@ from boto3.exceptions import Boto3Error
 # This might be bad...assuming that wherever this is running its always going to be
 # TERM=ansi and up to 256 colors.
 colors.use_color = 3
+
+
+#
+def aws_get_region():
+    return str(os.environ['AWS_DEFAULT_REGION']).rstrip()
+
+
+#
+def sts_decode_auth_msg(codedmsg):
+    try:
+        decoded = boto3.client('sts').decode_authorization_message(EncodedMessage=codedmsg)
+    except Boto3Error as e:
+        msg = 'Failed while decoding STS auth msg!: {} :: {}'.format(codedmsg, str(e))
+        log_debug(msg)
+        raise RuntimeError(msg)
+
+    return decoded
 
 
 #
@@ -219,7 +236,35 @@ def os_to_settings(os):
 
 
 #
-def aws_ec2_tag_value(nodename, tagname):
+def ec2_wait_for_state(instance, desired_state, timeout=300):
+    steptime = 5
+    actual_state = None
+    nodefilter = [{'Name': 'instance-id', 'Values': [instance]}]
+    ec2 = boto3.client('ec2', region_name=aws_get_region())
+
+    starttime = time.time()
+    while time.time() - starttime < timeout:
+        try:
+            rez = ec2.describe_instances(Filters=nodefilter)['Reservations']
+            if 0 < len(rez):
+                actual_state = rez[0]['Instances'][0]['State']['Name']
+                log_debug("desired state: {} ; actual state: {}".format(desired_state, actual_state))
+                if actual_state == desired_state:
+                    break
+                else:
+                    sleep(steptime)
+            else:
+                log_debug("Not yet able to query instance state...")
+                sleep(steptime)
+
+        except Boto3Error as e:
+            msg = "Failed while querying instance '{}' state!: {}".format(instance, str(e))
+            log_debug(msg)
+            raise RuntimeError(msg)
+
+
+#
+def ec2_tag_value(nodename, tagname):
     log_debug("Looking up tag '{}' for instance '{}'...".format(tagname, nodename))
 
     tagvalue = None
@@ -248,17 +293,14 @@ def aws_ec2_tag_value(nodename, tagname):
 
 
 #
-def aws_instance_id_from_name(name):
-    iid = None
-
+def ec2_instance_id_from_name(name):
     log_debug("Getting metadata for '{}'...".format(name))
 
+    iid = None
+    name_filter = [{'Name': 'tag:Name', 'Values': name}]
+    ec2 = boto3.client('ec2')
+
     try:
-        name_filter = [{
-            'Name': 'tag:Name',
-            'Values': name,
-        }]
-        ec2 = boto3.client('ec2')
         iid = ec2.describe_instances(Filters=name_filter)['Reservations'][0]['Instances'][0]['InstanceId']
     except Boto3Error as e:
         msg = "Failed while querying instance-id for name '{}'! :: {}".format(name, e.message)
@@ -275,7 +317,7 @@ def aws_volid_from_tag(name):
     volid = None
 
     try:
-        volid = aws_ec2_tag_value(name, 'rancherlabs.ci.addtl_volume')
+        volid = ec2_tag_value(name, 'rancherlabs.ci.addtl_volume')
     except RuntimeError as e:
         msg = "Failed to get volid for non-root volume!: {}".format(str(e))
         log_debug(msg)
