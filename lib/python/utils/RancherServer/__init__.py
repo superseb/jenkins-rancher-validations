@@ -1,14 +1,14 @@
-import os, boto3
+import os, sys
 
 from invoke import run, Failure
 from requests import ConnectionError, HTTPError
 from time import sleep
-from boto3.exceptions import Boto3Error
+# from boto3.exceptions import Boto3Error
 from botocore.exceptions import ClientError
 
-from .. import log_debug, log_info, request_with_retries, os_to_settings, nuke_aws_keypair, provision_aws_volume
-from .. import deprovision_aws_volume
-from ..DockerMachine import DockerMachine, DockerMachineError
+from .. import log_debug, log_info, request_with_retries
+from .. import deprovision_aws_volume, nuke_aws_keypair
+from ..PuppetApply import PuppetApply, PuppetApplyError
 
 
 class RancherServerError(RuntimeError):
@@ -73,8 +73,10 @@ class RancherServer(object):
         #
         def IP(self):
                 try:
-                        return DockerMachine().IP(self.name())
-                except DockerMachineError as e:
+                        with open('.data/rancher_server_addr') as f:
+                                return f.read().rstrip()
+
+                except OSError as e:
                         msg = "Failed to resolve IP addr for \'{}\'! : {}".format(self.name(), e.message)
                         log_debug(msg)
                         raise RancherServerError(msg) from e
@@ -82,21 +84,10 @@ class RancherServer(object):
         #
         def __deprovision_via_puppet(self):
                 try:
-                        run('rm -rf /tmp/puppet', echo=True)
-                        run('mkdir -p /tmp/puppet/modules && cp ./lib/puppet/Puppetfile /tmp/puppet/', echo=True)
-                        run('cd /tmp/puppet && librarian-puppet install --no-verbose --clean --path /tmp/puppet/modules >/dev/null', echo=True)
+                        manifest = ""
+                        PuppetApply(manifest)
 
-                        manifest = "ec2_instance {{ '{}':\n".format(self.name()) + \
-                                   "  region => 'us-west-2',\n" + \
-                                   "  ensure => absent,\n" + \
-                                   "}"
-
-                        with open('/tmp/puppet/manifest.pp', 'w') as manifest_file:
-                                manifest_file.write(manifest)
-
-                        run('puppet apply --modulepath=/tmp/puppet/modules --verbose /tmp/puppet/manifest.pp', echo=True)
-
-                except Failure as e:
+                except PuppetApplyError as e:
                         # These are non-failure exit codes for puppet apply.
                         if e.result.exited not in [0, 2]:
                                 msg = "Failed during provision of AWS network!: {}".format(str(e))
@@ -110,9 +101,10 @@ class RancherServer(object):
                 log_info("Deprovisioning Rancher Server via Docker Machine...")
 
                 try:
-                        DockerMachine().rm(self.name())
+                        #                        DockerMachine().rm(self.name())
+                        pass
 
-                except DockerMachineError as e:
+                except PuppetApplyError as e:
                         log_debug("Failed to deprovision Rancher Server. This is not an error.: {}".format(str(e)))
 
                 # and then be far less polite
@@ -165,7 +157,7 @@ class RancherServer(object):
 
                                 }
 
-                except Failure) as e:
+                except Failure as e:
                         msg = "Failed while ensuring ssh keypair!: {}".format(str(e))
                         log_debug(msg)
                         raise RancherServerError(msg) from e
@@ -182,109 +174,22 @@ class RancherServer(object):
                 pass
 
         #
-        def __provision_via_terraform(self):
-                # create + upload keypair for this job
-                self.__ensure_ssh_keypair()
-                sy.exit()
-
-                # create server instance
-                self.__create_server_node()
-
-                # install the requested docker version
-                self.__install_docker()
-
-                # install rancher/server
-                self.__install_rancher_server()
-
-        #
-        def __provisision_via_docker_machine(self):
+        def __provision_via_puppet(self):
                 try:
-                        server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
-                        settings = os_to_settings(server_os)
-                        user = settings['ssh_username']
-                        rancher_version = os.environ['RANCHER_VERSION']
-                        region = os.environ['AWS_DEFAULT_REGION']
-                        az = os.environ['AWS_ZONE']
-                        puppet_path = None
-                        addtl_volume_id = None
-                        tags = os.environ['AWS_TAGS']
-                        docker_version = os.environ['RANCHER_DOCKER_VERSION']
+                        manifest = ""
+                        PuppetApply(manifest)
 
-                        tags += ",rancher.docker.version,{}".format(docker_version)
+                except PuppetApplyError as e:
+                        # These are non-failure exit codes for puppet apply.
+                        if e.result.exited not in [0, 2]:
+                                msg = "Failed during provision of AWS network!: {}".format(str(e))
+                                log_debug(msg)
+                                raise RancherServerError(msg) from e
 
-                        os.environ['AWS_INSTANCE_TYPE'] = os.environ['RANCHER_SERVER_AWS_INSTANCE_TYPE']
-
-                        # RHEL/CentOS needs an additional volume
-                        if 'rhel' in server_os or 'centos' in server_os:
-                                addtl_vol_name = "{}-docker".format(self.name())
-                                addtl_volume_id = provision_aws_volume(
-                                        name=addtl_vol_name,
-                                        region=region,
-                                        zone=az,
-                                        tags=os.environ['AWS_TAGS'])
-                                tags += ",rancherlabs.ci.addtl_volid,{}".format(addtl_volume_id)
-
-                        # Create the node with Docker Machine because it does a good job of settings up the TLS
-                        # stuff but we are going to remove the packages and install our specified version over top
-                        # of the old /etc/docker.
-                        log_info("Creating Rancher server...")
-                        DockerMachine().create(self.name(), tags=tags)
-
-                        # place the ssh pub keys asap for debugging
-                        self.__add_ssh_keys()
-                        log_info("Rancher Server node is available for SSH at \'{}\'...".format(self.IP()))
-
-                        DockerMachine().ssh(self.name(), '\'echo "usermod -a -G docker $USER" | sudo -E -s\'')
-
-                        # RHEL/CentOS needs additional Docker storage configs
-                        DockerMachine().scp(self.name(), './lib/bash/rancher_ci_bootstrap.sh', '/tmp/')
-                        DockerMachine().ssh(self.name(), '\'chmod +x /tmp/rancher_ci_bootstrap.sh && /tmp/rancher_ci_bootstrap.sh\'')
-
-                        DockerMachine().ssh(
-                                self.name(), "docker run -d --restart=always --name=rancher_server_{} -p 8080:8080 rancher/server:{}".format(
-                                        rancher_version,
-                                        rancher_version))
-
-                        log_info("Rancher node hosting rancher/server will soon be available at http://{}:8080".format(self.IP()))
-                        log_info("WARNING: You may need to poll API endpoints until they are available!")
-
-                        with open('cattle_test_url', 'w') as cattle_test_url:
-                                cattle_test_url.write("http://{}:8080".format(self.IP()))
-
-                except (RancherServerError, DockerMachineError) as e:
-                        msg = "Failed to provision \'{}\'!: {}".format(self.name(), e.message)
-                        log_debug(msg)
-                        raise RancherServerError(msg) from e
-
-                return True
 
         #
         def provision(self):
-                self.__provision_via_terraform()
-
-        #
-        def __add_ssh_keys(self):
-                log_info("Populating {} with Rancher Labs ssh keys...".format(self.name()))
-
-                ssh_key_urls = ['https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci']
-                server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
-                settings = os_to_settings(server_os)
-                ssh_username = settings['ssh_username']
-                ssh_auth = "~/.ssh/authorized_keys"
-
-                if 'rhel' in server_os or 'centos' in server_os:
-                        DockerMachine().ssh(self.name(), 'sudo yum install -y wget')
-
-                for keyset in ssh_key_urls:
-                        try:
-                                cmd = "'wget {} -O - >> {} && chmod 0600 {}'".format(keyset, ssh_auth, ssh_auth)
-                                DockerMachine().ssh(self.name(), cmd)
-
-                        except DockerMachineError as e:
-                                msg = "Failed while adding ssh keys! : {}".format(e.message)
-                                log_debug(msg)
-                                raise RancherServerError(msg) from e
-                return True
+                self.__provision_via_puppet()
 
         #
         def __set_reg_token(self):
