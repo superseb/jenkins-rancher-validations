@@ -1,13 +1,13 @@
-import os, sys
+import os, sys, boto3, base64
 
 from invoke import run, Failure
 from requests import ConnectionError, HTTPError
 from time import sleep
-# from boto3.exceptions import Boto3Error
+from boto3.exceptions import Boto3Error
 from botocore.exceptions import ClientError
 
 from .. import log_debug, log_info, request_with_retries
-from .. import deprovision_aws_volume, nuke_aws_keypair
+from .. import ebs_provision_volume, ebs_deprovision_volume, nuke_aws_keypair
 from ..PuppetApply import PuppetApply, PuppetApplyError
 
 
@@ -116,7 +116,7 @@ class RancherServer(object):
                         nuke_aws_keypair(self.name())
 
                         if 'rhel' in server_os or 'centos' in server_os:
-                                deprovision_aws_volume("{}-docker".format(self.name()))
+                                ebs_deprovision_volume("{}-docker".format(self.name()))
 
                 except (ClientError, RancherServerError, RuntimeError) as e:
                         if 'ClientError' is type(e).__name__:
@@ -147,48 +147,68 @@ class RancherServer(object):
                 log_debug('Ensuring an ssh keypair exists...')
 
                 try:
+                        # create a key pair in the filesystem if one does not already exist
                         if not os.path.isfile('.ssh/{}'.format(self.name)):
-                                run('mkdir -p .ssh && rm -rf .ssh/{}'.format(self.name()))
-                                run("ssh-keygen -N '' -C '{}' -f .ssh/{}".format(self.name(), self.name()))
-                                run("chmod 0600 .ssh/{}".format(self.name()))
+                                run('mkdir -p .ssh && rm -rf .ssh/{}'.format(self.name()), echo=True)
+                                run("ssh-keygen -N '' -C '{}' -f .ssh/{}".format(self.name(), self.name()), echo=True)
+                                run("chmod 0600 .ssh/{}".format(self.name()), echo=True)
 
-                                keypair = {
-                                        'name': self.name(),
+                        # update the key pair in AWS - Yes, Terraform has a Provider for this and Pupupet does not...
+                        log_info("Uploading ssh pub key '{}' to AWS...".format(self.name()))
+                        ec2 = boto3.client('ec2', region_name=str(os.environ['AWS_DEFAULT_REGION']).rstrip())
+                        ec2.delete_key_pair(KeyName=self.name())
 
-                                }
+                        pubkey = open('.ssh/{}.pub'.format(self.name()), 'rb').read()
+                        log_debug("pub key: '{}'".format(pubkey))
 
-                except Failure as e:
+                        b64pubkey = base64.b64encode(pubkey)
+                        log_debug("base64 pub key: '{}'".format(b64pubkey))
+
+                        ec2.import_key_pair(
+                                KeyName=self.name(),
+                                PublicKeyMaterial=b64pubkey)
+
+                except (Failure, Boto3Error) as e:
                         msg = "Failed while ensuring ssh keypair!: {}".format(str(e))
                         log_debug(msg)
                         raise RancherServerError(msg) from e
 
         #
-        def __create_server_node(self):
-                pass
-
-        #
-        def __install_docker(self):
-                pass
-
-        def __install_rancher_server(self):
-                pass
+        def __compute_tags(self):
+                # in addition to AWS_TAGS, include a tag for Docker version which will be
+                # referenced by later provisining scripts.
+                return str(os.environ['AWS_TAGS']).rstrip() + \
+                        ',rancher.docker.version,{}'.format(str(os.environ['RANCHER_DOCKER_VERSION']).rstrip())
 
         #
         def __provision_via_puppet(self):
                 try:
-                        manifest = ""
-                        PuppetApply(manifest)
+                        tags = self.__compute_tags()
+                        server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+
+                        # if we are provisioning RHEL or CentOS we have to:
+                        # 1) create a second EBS volume which will host an LVM thinpool
+                        # 2) tag the EC2 instance with the new volid so late provisioning scripts can find it
+                        if 'rhel' in server_os or 'centos' in server_os:
+                                addtl_volid = ebs_provision_volume(
+                                        "{}-docker".format(self.name()),
+                                        region=str(os.environ['AWS_DEFAULT_REGION']).rstrip(),
+                                        zone=str(os.environ['AWS_ZONE']).rstrip(),
+                                        tags=tags)
+                                tags += ',rancherlabs.ci.addtl_volid,{}'.format(addtl_volid)
+
+
+                        data = {'rancher_infra::ci::validation_tests::aws::addtl_tags': tags }
+                        PuppetApply(data, 'aws.pp')
 
                 except PuppetApplyError as e:
-                        # These are non-failure exit codes for puppet apply.
-                        if e.result.exited not in [0, 2]:
-                                msg = "Failed during provision of AWS network!: {}".format(str(e))
-                                log_debug(msg)
-                                raise RancherServerError(msg) from e
-
+                        msg = "Failed during provision of AWS network!: {}".format(str(e))
+                        log_debug(msg)
+                        raise RancherServerError(msg) from e
 
         #
         def provision(self):
+                self.__ensure_ssh_keypair()
                 self.__provision_via_puppet()
 
         #

@@ -4,7 +4,7 @@ from time import sleep, time
 from requests import ConnectionError, HTTPError
 
 from .. import log_info, log_debug, os_to_settings, nuke_aws_keypair, request_with_retries
-from .. import provision_aws_volume, deprovision_aws_volume
+from .. import ebs_provision_volume, ebs_deprovision_volume
 from ..RancherServer import RancherServer, RancherServerError
 
 
@@ -170,7 +170,7 @@ class RancherAgents(object):
                         try:
                                 if 'rhel' in agent_os or 'centos' in agent_os:
                                         tags = self.__compute_tags()
-                                        addtl_vol_id = provision_aws_volume(
+                                        addtl_vol_id = ebs_provision_volume(
                                                 name="{}-docker".format(agent_name),
                                                 region=os.environ['AWS_DEFAULT_REGION'],
                                                 zone=os.environ['AWS_ZONE'],
@@ -378,7 +378,7 @@ class RancherAgents(object):
                                 log_info("Nuking any lingering Agent AWS keypairs for node '{}'...".format(agent))
                                 nuke_aws_keypair(agent)
                                 log_info("Removing vol '{}-docker' if it exists...".format(agent))
-                                deprovision_aws_volume("{}-docker".format(agent))
+                                ebs_deprovision_volume("{}-docker".format(agent))
 
                 except (RancherServerError, RuntimeError) as e:
                         msg = "Failed with deprovisining agent!: {}".format(str(e))

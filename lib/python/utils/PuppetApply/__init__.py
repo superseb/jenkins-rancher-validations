@@ -33,23 +33,29 @@ class PuppetApply(object):
     # setup a temporary puppet directory
     def __prep(self):
         try:
-            run("rm -rf {} && mkdir -p {}".format(self.puppetpath, self.puppetpath))
-            run("cp ./lib/puppet/Puppetfile && librarian-puppet install --no-verbose --path {} > /dev/null".format(self.puppetpath))
-            run("cp -r ./lib/puppet/rancher_infra {}/".format(self.modulepath))
+            run("mkdir -p {}".format(self.puppetpath, echo=True))
+            run("cp ./lib/puppet/Puppetfile {} && (cd {} && librarian-puppet install --no-verbose --path {})".format(
+                self.puppetpath, self.puppetpath, self.modulepath),
+                echo=True)
+            run("cp -rf ./lib/puppet/modules/rancher_infra {}/".format(self.modulepath), echo=True)
         except Failure as e:
             msg = "Failed while prepping temporary Puppet directory!: {} :: {}".format(e.result.exited, e.result.stderr)
             log_debug(msg)
             raise PuppetApplyError(msg) from e
 
     #
-    def __apply(self, manifest):
-        cmd = "puppet apply --detailed-exitcodes --modulepath {}".format(self.modulepath)
+    def __apply(self, klass, klassdata):
+        cmd = "puppet apply --detailed-exitcodes --modulepath {} ".format(self.modulepath)
 
         if os.environ.get('DEBUG'):
             if os.environ['DEBUG']:
-                cmd += cmd + " --debug"
+                cmd += "--debug"
 
-        cmd = "{} {}".format(cmd, manifest)
+        # drop the data into rancher_infra/data/local.yaml
+        err_and_exit("FIXME: code to populate local.yaml!")
+
+        # enforce the specified class
+        cmd = 'cd {} && {} -e include {}'.format(self.puppetpath, klass)
 
         try:
             log_debug("Running puppet apply cmd: '{}'...".format(cmd))
@@ -64,6 +70,6 @@ class PuppetApply(object):
         return result.stdout
 
     #
-    def __init__(self, manifest):
+    def __init__(self, data, manifest):
         self.__validate_envvars()
-        self.__apply(manifest)
+        self.__apply(data, manifest)

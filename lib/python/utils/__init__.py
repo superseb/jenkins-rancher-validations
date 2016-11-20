@@ -285,7 +285,7 @@ def aws_volid_from_tag(name):
 
 
 #
-def deprovision_aws_volume(name, region='us-west-2', zone='a'):
+def ebs_deprovision_volume(name, region='us-west-2', zone='a'):
     log_info("Removing volume '{}' if  it exists...".format(name))
 
     try:
@@ -310,7 +310,27 @@ def deprovision_aws_volume(name, region='us-west-2', zone='a'):
 
 
 #
-def provision_aws_volume(name, region='us-west-2', zone='a', size=20, voltype='gp2', tags='is_ci,true'):
+def tag_csv_to_array(tagcsv):
+    log_debug("Converting tag csv to array: {}".format(tagcsv))
+
+    tag_dict_list = []
+    taglist = tagcsv.split(',')
+    taglist.reverse()
+
+    if 0 != len(taglist) % 2:
+        msg = "AWS_TAGS split on ',' has length {} which makes no sense!".format(str(len(taglist)))
+        log_debug(msg)
+        raise RuntimeError(msg)
+
+    while 0 != len(taglist):
+        tag_dict = {'Key': str(taglist.pop()), 'Value': str(taglist.pop()) }
+        tag_dict_list.append(tag_dict)
+
+    return tag_dict_list
+
+
+#
+def ebs_provision_volume(name, region='us-west-2', zone='a', size=20, voltype='gp2', tags='is_ci,true'):
     log_info("Creating EBS volume...")
 
     try:
@@ -319,26 +339,11 @@ def provision_aws_volume(name, region='us-west-2', zone='a', size=20, voltype='g
         vol = ec2.create_volume(Size=size, VolumeType=voltype, AvailabilityZone="{}{}".format(region, zone))
         log_info("EBS volume '{}' created...".format(str(vol.id)))
 
-        # tag the volume for easier auditing
-        tag_dict_list = []
-        tags += ",Name,{}".format(name)
-        tag_list = tags.split(',')
-        tag_list.reverse()
+        tags = tag_csv_to_array(tags)
+        log_info("Tagging volume '{}' : '{}'...".format(str(vol.id), tags))
+        ec2.create_tags(Resources=[vol.id], Tags=tags)
 
-        # ugly input validation
-        if 0 != len(tag_list) % 2:
-            msg = "AWS_TAGS split on ',' has length {} which makes no sense!".format(str(len(tag_list)))
-            log_debug(msg)
-            raise RuntimeError(msg)
-
-        while 0 != len(tag_list):
-            tag_dict = {'Key': str(tag_list.pop()), 'Value': str(tag_list.pop())}
-            tag_dict_list.append(tag_dict)
-
-        log_info("Tagging volume '{}' : '{}'...".format(str(vol.id), tag_dict_list))
-        ec2.create_tags(Resources=[vol.id], Tags=tag_dict_list)
-
-    except Boto3Error as e:
+    except (RuntimeError, Boto3Error) as e:
         msg = "Failed while provisioning EBS volme!: {}".format(e.message)
         log_debug(msg)
         raise RuntimeError(msg) from e
