@@ -220,7 +220,6 @@ class RancherServer(object):
                                 placement = {'AvailabilityZone': '{}{}'.format(region, zone)}
                                 subnetid = str(os.environ['AWS_SUBNET_ID']).rstrip()
                                 custom_vols = None
-                                addtl_volid = None
 
                                 network_ifs = [{
                                         'DeviceIndex': 0,
@@ -240,12 +239,6 @@ class RancherServer(object):
 
                                 # RHEL osfamily needs a second LVM volume for thinpool config
                                 if 'rhel' in server_os or 'centos' in server_os:
-                                        addtl_volid = ebs_provision_volume(
-                                                self.name(),
-                                                region=aws_get_region(),
-                                                zone=str(os.environ['AWS_ZONE'].rstrip()),
-                                                tags=str(os.environ['AWS_TAGS'].rstrip()))
-
                                         custom_vols = [{
                                                 'DeviceName': '/dev/sdb',
                                                 'Ebs': {'VolumeSize': 30, 'DeleteOnTermination': True}}]
@@ -284,8 +277,6 @@ class RancherServer(object):
                                 log_info("instance-id of Rancher Server node: {}".format(instance_id))
 
                                 tags = self.__compute_tags()
-                                if 'rhel' in server_os or 'centos' in server_os:
-                                        tags.append({'Key': 'rancherlabs.ci.addtl_volid', 'Value': str(addtl_volid)})
                                 log_info("Tagging instance '{}' with tags: {}".format(instance_id, tags))
 
                                 # give our instance time to enter 'pending' before we try to tag it
@@ -330,7 +321,7 @@ class RancherServer(object):
 
                         # among other things, need to setup the thinpool vol before docker install
                         if 'rhel' in server_os or 'centos' in server_os:
-                                sshcmd = 'chmod +x /tmp/*.sh && /tmp/docker/rancher_ci_bootstrap.sh'
+                                sshcmd = 'chmod +x /tmp/*.sh && /tmp/rancher_ci_bootstrap.sh'
                                 SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd)
 
                         sshcmd = 'chmod +x /tmp/*.sh && /tmp/docker_version_from_aws_tag.sh'
