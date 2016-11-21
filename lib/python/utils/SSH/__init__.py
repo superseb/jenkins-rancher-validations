@@ -30,6 +30,7 @@ class SSH(object):
                 attempts += 1
                 result = run(sshcmd, echo=True)
                 if result.ok:
+                    log_debug('ssh cmd output: {}'.format(result.stdout))
                     break
 
             except Failure as e:
@@ -42,8 +43,7 @@ class SSH(object):
             log_debug(msg)
             raise SSHError(msg)
 
-        if result.ok:
-            return result.return_code
+        return result.return_code
 
     #
     def __init__(self, key, addr, user, cmd, timeout=10, max_attempts=10):

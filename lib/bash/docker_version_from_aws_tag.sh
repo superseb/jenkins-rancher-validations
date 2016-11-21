@@ -72,6 +72,9 @@ main() {
 	   schedule_docker_lvm_tweaks
 	fi
     fi
+
+    # add the current user to the docker group so we can later run docker containers
+    sudo usermod -G docker "${USER}"
 }
 
 
