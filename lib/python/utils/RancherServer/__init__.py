@@ -10,7 +10,7 @@ from .. import log_debug, log_info, log_warn, request_with_retries, tag_csv_to_a
 from .. import sts_decode_auth_msg, ec2_tag_value, aws_get_region
 from .. import ec2_wait_for_state, ec2_instance_id_from_name
 
-from ..SSH import SSH, SSHError
+from ..SSH import SSH, SSHError, SCP
 
 
 class RancherServerError(RuntimeError):
@@ -188,7 +188,7 @@ class RancherServer(object):
 
         #
         def __ensure_rancher_server(self):
-                log_info("Ensuring Ransher Server node '{}'...".format(self.name()))
+                log_info("Ensuring Rancher Server node '{}'...".format(self.name()))
 
                 # only intersted in nodes which might have same name and which are running or pending
                 node_filter = [
@@ -281,8 +281,16 @@ class RancherServer(object):
                 try:
                         server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
                         os_settings = os_to_settings(server_os)
+
+                        SCP(self.name(),
+                            self.IP(),
+                            os_settings['ssh_username'],
+                            './lib/bash/*.sh',
+                            '/tmp/')
+
                         docker_version = ec2_tag_value(self.name(), 'rancher.docker.version')
-                        sshcmd = 'wget -O - https://releases.rancher.com/install-docker/{}.sh | sudo sh -'.format(docker_version)
+                        sshcmd = 'chmod +x /tmp/*.sh && /tmp/docker_version_from_aws_tag.sh'
+
                         SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd)
 
                 except SSHError as e:

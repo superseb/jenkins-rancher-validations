@@ -4,6 +4,7 @@ from invoke import run, Failure
 from .. import log_debug
 
 
+#
 class SSHError(RuntimeError):
     message = None
 
@@ -12,23 +13,10 @@ class SSHError(RuntimeError):
         super(SSHError, self).__init__(self.message)
 
 
+#
 class SSH(object):
 
     default_ssh_options = None
-
-    #
-    def __validate_envvars(self):
-        required_envvars = []
-        result = True
-        missing = []
-        for envvar in required_envvars:
-            if envvar not in os.environ:
-                log_debug("Missing envvar \'{}\'!".format(envvar))
-                missing.append(envvar)
-                result = False
-        if False is result:
-            raise SSHError("The following environment variables are required: {}".format(', '.join(missing)))
-        return True
 
     #
     def __cmd(self, key, addr, user, cmd, max_attempts=10):
@@ -59,6 +47,44 @@ class SSH(object):
 
     #
     def __init__(self, key, addr, user, cmd, timeout=10, max_attempts=10):
-        self.__validate_envvars()
         self.default_ssh_options = '-o StrictHostKeyChecking=no -o ConnectTimeout={} -i .ssh/{}'.format(timeout, key)
         self.__cmd(key, addr, user, cmd, max_attempts)
+
+
+#
+class SCP(object):
+
+    default_ssh_options = None
+
+    #
+    def __cp(self, key, addr, user, src, dst, timeout, max_attempts):
+        scpcmd = "scp {} {} {}@{}:{}".format(self.default_ssh_options, src, user, addr, dst)
+
+        result = None
+
+        attempts = 0
+        while attempts < max_attempts:
+            try:
+                log_debug("Running scp cmd  '{}'...".format(scpcmd))
+                attempts += 1
+                result = run(scpcmd, echo=True)
+                if result.ok:
+                    break
+
+            except Failure as e:
+                msg = "scp command failed!: {} :: {}".format(e.result.return_code, e.result.stderr)
+                log_debug(msg)
+                time.sleep(30)
+
+        if attempts >= max_attempts:
+            msg = "SCP command exceeded max attempts!"
+            log_debug(msg)
+            raise SSHError(msg)
+
+        if result.ok:
+            return result.return_code
+
+    #
+    def __init__(self, key, addr, user, src, dest, timeout=10, max_attempts=10):
+        self.default_ssh_options = '-o StrictHostKeyChecking=no -o ConnectTimeout={} -i .ssh/{}'.format(timeout, key)
+        self.__cp(key, addr, user, src, dest, timeout, max_attempts)
