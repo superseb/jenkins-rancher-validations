@@ -1,4 +1,4 @@
-import os, boto3, time
+import os, boto3
 
 from invoke import Failure
 from requests import ConnectionError, HTTPError
@@ -7,8 +7,7 @@ from boto3.exceptions import Boto3Error
 from botocore.exceptions import ClientError
 
 from .. import log_debug, log_info, log_warn, request_with_retries, os_to_settings
-from .. import sts_decode_auth_msg, ec2_tag_value, aws_get_region, ec2_wait_for_state, ec2_node_ensure, ec2_node_public_ip
-from .. import ec2_compute_tags, ec2_ensure_ssh_keypair
+from .. import ec2_tag_value, aws_get_region, ec2_node_ensure, ec2_node_public_ip
 
 from ..SSH import SSH, SSHError, SCP
 
@@ -167,123 +166,6 @@ class RancherServer(object):
                 return True
 
         #
-        def __ensure_rancher_server(self):
-                log_info("Ensuring Rancher Server node '{}'...".format(self.name()))
-
-                # only intersted in nodes which might have same name and which are running or pending
-                node_filter = [
-                        {'Name': 'tag:Name', 'Values': [self.name()]},
-                        {'Name': 'instance-state-name', 'Values': ['running', 'pending']}
-                ]
-
-                try:
-                        ec2 = boto3.client('ec2', region_name=str(os.environ['AWS_DEFAULT_REGION']).rstrip())
-                        instances = ec2.describe_instances(Filters=node_filter)
-                        log_debug("instance: {}".format(instances))
-
-                        # first check if server(s) by our specified name already exists
-                        if 0 != len(instances['Reservations']):
-                                msg = "Detected already running instance by name of '{}'...".format(self.name())
-                                log_debug(msg)
-                                raise RancherServerError(msg)
-
-                        # nope, let's go ahead and create one
-                        else:
-                                keyname = self.__ensure_ssh_keypair()
-
-                                server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
-                                os_settings = os_to_settings(server_os)
-                                sgids = [str(os.environ['AWS_SECURITY_GROUP_ID']).rstrip()]
-                                instance_type = str(os.environ['RANCHER_SERVER_AWS_INSTANCE_TYPE']).rstrip()
-                                zone = str(os.environ['AWS_ZONE']).rstrip()
-                                region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
-                                placement = {'AvailabilityZone': '{}{}'.format(region, zone)}
-                                subnetid = str(os.environ['AWS_SUBNET_ID']).rstrip()
-                                custom_vols = None
-
-                                network_ifs = [{
-                                        'DeviceIndex': 0,
-                                        'SubnetId': subnetid,
-                                        'AssociatePublicIpAddress': True,
-                                        'Groups': sgids,
-                                }]
-
-                                # yuck
-                                iam_profile = boto3.resource('iam').InstanceProfile(str(os.environ['AWS_INSTANCE_PROFILE']))
-                                iam_profile = {'Name': iam_profile.name}
-
-                                # CoreOS is odd-ball in that it uses a different root volume
-                                if 'core' in server_os:
-                                        custom_vols = [{'DeviceName': '/dev/xvda', 'Ebs': {'VolumeSize': 30}}]
-                                        log_info("Setting custom root device '{}' for CoreOS...".format(custom_vols))
-
-                                # RHEL osfamily needs a second LVM volume for thinpool config
-                                if 'rhel' in server_os or 'centos' in server_os:
-                                        custom_vols = [{
-                                                'DeviceName': '/dev/sdb',
-                                                'Ebs': {'VolumeSize': 30, 'DeleteOnTermination': True}}]
-                                        log_info("Creating second volume to host thinpool config for RHEL osfamily: {}".format(custom_vols))
-
-                                log_info("Creating Rancher Server '{}'...".format(self.name()))
-
-                                # have to include block device mapping configs for these OSes and setting
-                                # the parameter to None makes the boto3 API unhappy. :\
-                                if 'rhel' in server_os or 'centos' in server_os or 'core' in server_os:
-                                        instance = ec2.run_instances(
-                                                ImageId=os_settings['ami-id'],
-                                                MinCount=1,
-                                                MaxCount=1,
-                                                KeyName=keyname,
-                                                InstanceType=instance_type,
-                                                Placement=placement,
-                                                NetworkInterfaces=network_ifs,
-                                                IamInstanceProfile=iam_profile,
-                                                BlockDeviceMappings=custom_vols)
-                                else:
-                                        instance = ec2.run_instances(
-                                                ImageId=os_settings['ami-id'],
-                                                MinCount=1,
-                                                MaxCount=1,
-                                                KeyName=keyname,
-                                                InstanceType=instance_type,
-                                                Placement=placement,
-                                                NetworkInterfaces=network_ifs,
-                                                IamInstanceProfile=iam_profile)
-
-                                log_debug("run request response for '{}'...".format(instance))
-                                log_debug("instance info: {}".format(instance['Instances']))
-
-                                instance_id = instance['Instances'][0]['InstanceId']
-                                log_info("instance-id of Rancher Server node: {}".format(instance_id))
-
-                                tags = ec2_compute_tags(self.name())
-                                log_info("Tagging instance '{}' with tags: {}".format(instance_id, tags))
-
-                                # give our instance time to enter 'pending' before we try to tag it
-                                time.sleep(10)
-                                ec2.create_tags(
-                                        Resources=[instance_id],
-                                        Tags=tags)
-
-                                # waiting for 'running' is the easiest way to eliminate race conditions later
-                                log_info("Waiting for node to enter state 'running'...")
-                                ec2_wait_for_state(instance_id, 'running')
-
-                except (Boto3Error, ClientError) as e:
-                        addtl_msg = str(e)
-                        if 'ClientError' == e.__class__.__name__:
-                                errmsg = e.response['Error']['Message']
-                                if 'Encoded authorization failure' in errmsg:
-                                        codedmsg = errmsg.split(':')[1].replace(' ', '')
-                                        addtl_msg = sts_decode_auth_msg(codedmsg)
-
-                        msg = "Failed while provisioning Rancher Server!: {}".format(addtl_msg)
-                        log_debug(msg)
-                        raise RancherServerError(msg)
-
-                return True
-
-        #
         def __install_server_container(self):
                 rancher_version = str(os.environ['RANCHER_VERSION']).rstrip()
                 server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
@@ -331,10 +213,15 @@ class RancherServer(object):
 
         #
         def provision(self):
+                server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+
                 try:
-                        ec2_ensure_ssh_keypair(self.name())
                         ec2_node_ensure(self.name())
-                        self.__docker_install()
+
+                        # CoreOS and RancherOS ship w/ vendored Docker engine
+                        if 'rancher' not in server_os and 'core' not in server_os:
+                                self.__docker_install()
+
                         self.__install_server_container()
 
                         with open('cattle_test_url', 'w') as f:

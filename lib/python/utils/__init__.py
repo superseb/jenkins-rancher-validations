@@ -250,6 +250,8 @@ def os_to_settings(os):
 
 #
 def ec2_wait_for_state(instance, desired_state, timeout=300):
+    log_info("Waiting for node '{}' to enter state '{}'...".format(instance, desired_state))
+
     steptime = 5
     actual_state = None
     nodefilter = [{'Name': 'instance-id', 'Values': [instance]}]
@@ -259,10 +261,14 @@ def ec2_wait_for_state(instance, desired_state, timeout=300):
     while time.time() - starttime < timeout:
         try:
             rez = ec2.describe_instances(Filters=nodefilter)['Reservations']
+            log_debug("rez: {}".format(rez))
+
             if 0 < len(rez):
                 actual_state = rez[0]['Instances'][0]['State']['Name']
                 log_debug("desired state: {} ; actual state: {}".format(desired_state, actual_state))
+
                 if actual_state == desired_state:
+                    log_info("Node '{}' has entered state '{}'.".format(instance, desired_state))
                     break
                 else:
                     sleep(steptime)
@@ -280,7 +286,7 @@ def ec2_wait_for_state(instance, desired_state, timeout=300):
 def ec2_tag_value(nodename, tagname):
     log_debug("Looking up tag '{}' for instance '{}'...".format(tagname, nodename))
 
-    tagvalue = None
+    tag_value = None
 
     try:
         ec2_filter = [{'Name': 'tag:Name', 'Values': [nodename]}]
@@ -289,6 +295,7 @@ def ec2_tag_value(nodename, tagname):
         ec2 = boto3.client('ec2')
         node_metadata = ec2.describe_instances(Filters=ec2_filter)
         log_debug("node metadata: {}".format(node_metadata))
+
         tags = node_metadata['Reservations'][0]['Instances'][0]['Tags']
         log_debug("tags: {}".format(tags))
 
@@ -298,7 +305,7 @@ def ec2_tag_value(nodename, tagname):
                 break
 
     except (IndexError, KeyError, Boto3Error) as e:
-        msg = "Failed while looking up tag '{}'!: {}".format(tagname, str(e.args))
+        msg = "Failed while looking up tag '{}'!: {}".format(tagname, str(e))
         log_debug(msg)
         raise RuntimeError(msg) from e
 
@@ -709,20 +716,19 @@ def ec2_node_ensure(nodename):
                     NetworkInterfaces=network_ifs,
                     IamInstanceProfile=iam_profile)
 
-            log_debug("run request response for '{}'...".format(instance))
-            log_debug("instance info: {}".format(instance['Instances']))
+        log_debug("run request response for '{}'...".format(instance))
+        log_debug("instance info: {}".format(instance['Instances']))
 
-            instance_id = instance['Instances'][0]['InstanceId']
-            log_info("instance-id of Rancher Server node: {}".format(instance_id))
+        instance_id = instance['Instances'][0]['InstanceId']
+        log_info("instance-id of Rancher Server node: {}".format(instance_id))
 
-            tags = ec2_compute_tags(nodename)
-            log_info("Tagging instance '{}' with tags: {}".format(instance_id, tags))
-
-            # give our instance time to enter 'pending' before we try to tag it
-            time.sleep(20)
-            ec2.create_tags(
-                Resources=[instance_id],
-                Tags=tags)
+        # give the node a second to provision before we start tagging...
+        sleep(20)
+        tags = ec2_compute_tags(nodename)
+        log_info("Tagging instance '{}' with tags: {}".format(instance_id, tags))
+        ec2.create_tags(
+            Resources=[instance_id],
+            Tags=tags)
 
         # waiting for 'running' is the easiest way to eliminate race conditions later
         log_info("Waiting for node to enter state 'running'...")
@@ -739,9 +745,9 @@ def ec2_node_ensure(nodename):
                 codedmsg = errmsg.split(':')[1].replace(' ', '')
                 addtl_msg = sts_decode_auth_msg(codedmsg)
 
-                msg = "Failed while provisioning Rancher Server!: {}".format(addtl_msg)
-                log_debug(msg)
-                raise RuntimeError(msg) from e
+        msg = "Failed while provisioning Rancher Server!: {}".format(addtl_msg)
+        log_debug(msg)
+        raise RuntimeError(msg) from e
 
     return True
 

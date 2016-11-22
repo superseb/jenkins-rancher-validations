@@ -149,13 +149,10 @@ PUPPET
     set -e
     sudo puppet apply --verbose --detailed-exitcodes /tmp/docker_config.pp
 
-    sudo systemctl daemon-reload # just in case
-
-    set +e ; sudo systemctl stop docker ; sleep 5; set -e
-
+    sudo puppet resource service docker ensure=stopped
     sudo rm -rf /var/lib/docker/network
     sudo ip link del docker0
-    sudo systemctl start docker
+    sudo puppet resource service docker ensure=running
 }
 
 
@@ -167,7 +164,8 @@ docker_install_tag_version() {
 
     docker_version="$(ec2_tag_get_docker_version)" || exit $?
     wget -O - "https://releases.rancher.com/install-docker/${docker_version}.sh" | sudo bash -
-    sudo systemctl restart docker
+    sudo puppet resource service docker ensure=stopped
+    sudo puppet resource service docker ensure=running
 }
 
 
@@ -212,7 +210,7 @@ system_prep() {
 	    export DEBCONF_NONINTERACTIVE_SEEN=true
 	    sudo apt-get update
 	    sudo apt-get -y upgrade
-	    sudo apt-get install -y jq awscli htop mosh cloud-guest-utils
+	    sudo apt-get install -y jq awscli htop mosh cloud-guest-utils puppet
 	    ;;
 	
 	default)
@@ -273,11 +271,15 @@ main() {
 	echo 'Performing special RHEL osfamily storage config...'
 	redhat_config
 	docker_lvm_thinpool_config
-    else
 	docker_install_tag_version
+
+    elif [ 'debian' == "${osfamily}" ]; then
+	docker_install_tag_version
+	
+    else
+	echo "OS family \'${osfamily}\' will default to vendor supplied and pre-installed Docker engine."
     fi
 }
-
 
 # the fun starts here
 main
