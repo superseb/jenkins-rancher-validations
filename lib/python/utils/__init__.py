@@ -786,7 +786,7 @@ def ec2_node_terminate(nodename, region='us-west-2'):
         for node in range(0, len(rez)):
             instance_id = rez[0]['Instances'][node]['InstanceId']
             log_info("Terminated instance-id '{}'...".format(instance_id))
-            ec2.terminate_instances(InstanceIds=[instance])
+            ec2.terminate_instances(InstanceIds=[instance_id])
 
     except Boto3Error as e:
         msg = "Failed while terminating node '{}'!: {}".format(nodename, str(e))

@@ -176,7 +176,7 @@ docker_install_tag_version() {
 ###############################################################################
 fetch_rancherlabs_ssh_keys() {
     wget -c -O - \
-	 https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci >> ~/.ssh/authorized_keys
+	 https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci >> "${HOME}/.ssh/authorized_keys"
 }
 
 
