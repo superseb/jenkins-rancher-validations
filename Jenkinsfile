@@ -137,12 +137,12 @@ if ( true == via_webhook() && 'master' == rancher_version()) {
 
 	if ( "false" == "${PIPELINE_DEPROVISION_STOP}" ) {
 	  
-	  stage ('provision AWS') {
-	    sh "docker run --rm  " +
-	      "-v \"\$(pwd)\":/workdir " +
-	      "--env-file .env " +
-	      "rancherlabs/ci-validation-tests aws.provision"
-	  }
+	  // stage ('provision AWS') {
+	  //   sh "docker run --rm  " +
+	  //     "-v \"\$(pwd)\":/workdir " +
+	  //     "--env-file .env " +
+	  //     "rancherlabs/ci-validation-tests aws.provision"
+	  // }
 
 	  stage('provision rancher/server') {
 	    sh "docker run --rm  " +

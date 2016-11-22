@@ -74,9 +74,12 @@ class DockerMachine(object):
             raise DockerMachineError(msg) from e
 
     #
-    def create(self, name):
+    def create(self, name, tags=None):
 
         try:
+            if tags:
+                os.environ['AWS_TAGS'] = tags
+
             # Have to do some envvar translation for Docker Machine.
             aws_to_dm_env()
 
@@ -85,15 +88,17 @@ class DockerMachine(object):
             server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
             settings = os_to_settings(server_os)
             docker_version = os.environ['RANCHER_DOCKER_VERSION']
+            engine_install_url = "https://raw.githubusercontent.com/nrvale0/jenkins-rancher-validations/stable/lib/bash/docker_version_from_aws_tag.sh"
 
             # create via Docker Machine because it does all the hard work of
             # creating TLS certs + keys
             cmd = "create " + \
-                  "--engine-install-url https://releases.rancher.com/install-docker/{}.sh ".format(docker_version) + \
+                  "--engine-install-url {} ".format(engine_install_url) + \
                   "--driver amazonec2 " + \
                   "--amazonec2-retries 5 " + \
                   "--amazonec2-security-group {} ".format(aws_security_group) + \
                   "--amazonec2-ssh-user {} ".format(settings['ssh_username']) + \
+                  "--amazonec2-tags {} ".format(tags) + \
                   "--amazonec2-ami {} ".format(settings['ami-id'])
 
             if 'coreos' in server_os:

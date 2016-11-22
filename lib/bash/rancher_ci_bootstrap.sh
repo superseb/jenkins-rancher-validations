@@ -1,8 +1,8 @@
-#!/bin/sh
+#!/bin/bash
 
 # send all stdout & stderr to rancherci-bootstrap.log
-exec > /tmp/rancherci-bootstrap.log
-exec 2>&1
+#exec > /tmp/rancher-ci-bootstrap.log
+#exec 2>&1
 set -uxe
 
 
@@ -26,48 +26,15 @@ get_osfamily() {
 
 
 ###############################################################################
-# populate system with Rancher Labs SSH keys
-###############################################################################
-fetch_rancherlabs_ssh_keys() {
-    wget -c -O - \
-	 https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci >> ~/.ssh/authorized_keys
-}
-
-
-###############################################################################
-# install some things required to query Docker version from tag
-###############################################################################
-system_prep() {
-    local osfamily
-
-    osfamily="$(get_osfamily)" || exit $?
-
-    case $osfamily in
-	'redhat')
-	    sudo yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-	    sudo yum install -y wget jq python-pip htop
-	    sudo pip install awscli
-	    sudo wget -O /usr/local/bin/ec2metadata http://s3.amazonaws.com/ec2metadata/ec2-metadata
-	    sudo chmod +x /usr/local/bin/ec2metadata
-	    ;;
-
-	'debian')
-	    sudo apt-get update && apt-get install -y jq awscli wget
-	    ;;
-    esac
-}
-
-
-###############################################################################
 # get the AWS region
 ###############################################################################
 aws_region() {
     local region
 
-    region="$(ec2metadata -z | cut -f2 -d' ' | sed -e 's/.$//g')" || exit $?
+    region="$(ec2metadata --availability-zone | cut -f2 -d' ' | sed -e 's/.$//g')" || exit $?
 
     if [ -z "${region}" ]; then
-	echo 'Falied to query AWS region!'
+	echo 'Failed to query AWS region!'
 	exit -1
     fi
     echo "${region}"
@@ -89,39 +56,21 @@ aws_instance_id() {
     echo "${instance_id}"
 }
 
-###############################################################################
-# get the volid for extra volumes (redhat osfamily)
-###############################################################################
-aws_addtl_volid() {
-    local instance_id
-    local vol_id
-
-    instance_id="$(aws_instance_id)" || exit $?
-    vol_id="$(aws ec2 --region us-west-2 describe-tags --filter Name=resource-id,Values="${instance_id}" --out=json | \
-			 jq '.Tags[]| select(.Key == "rancherlabs.ci.addtl_volume")|.Value' | \
-			 sed -e 's/\"//g')" || exit $?
-
-    if [ -z "${vol_id}" ]; then
-	echo 'Failed to query secondary volid from AWS.'
-	exit 1
-    fi
-    echo "${vol_id}"
-}
-
 
 ###############################################################################
-# get the Docker version specified in AWS tag rancher.docker.version
+# get the preferred Docker version from EC2 tag
 ###############################################################################
-get_specified_docker_version() {
+ec2_tag_get_docker_version() {
     local instance_id
     local region
     local docker_version
 
     instance_id="$(aws_instance_id)" || exit $?
     region="$(aws_region)" || exit $?
+
     docker_version="$(aws ec2 --region "${region}" describe-tags --filter Name=resource-id,Values="${instance_id}" --out=json | \
-			 jq '.Tags[]| select(.Key == "rancher.docker.version")|.Value' | \
-			 sed -e 's/\"//g')" || exit $?
+			   jq '.Tags[]| select(.Key == "rancher.docker.version")|.Value' | \
+			   sed -e 's/\"//g')" || exit $?
 
     if [ -z "${docker_version}" ]; then
 	echo 'Failed to query rancher.docker.version from instance tags.'
@@ -131,42 +80,171 @@ get_specified_docker_version() {
 }
 
 
+###############################################################################
+# add RHEL Docker yum config
+###############################################################################
+docker_repo_yum_create() {
+    sudo tee /etc/yum.repos.d/docker.repo <<-EOF 
+[dockerrepo]
+name=Docker Repository
+baseurl=https://yum.dockerproject.org/repo/main/centos/7/
+enabled=1
+gpgcheck=1
+gpgkey=https://yum.dockerproject.org/gpg
+EOF
+    sudo yum clean all -y
+    sudo yum makecache
+}
+
+
+###############################################################################
+# add RHEL Docker yum config
+###############################################################################
+docker_version_match_rhel() {
+    local docker_version
+    docker_version="$(ec2_tag_get_docker_version)" || exit $?
+    
+    docker_version_match="$(sudo yum --showduplicates list docker-engine  | grep 1.10.3 | sort -n | head -n1 | awk -F' ' '{print $2}')" || exit $?
+    if [ -z "${docker_version_match}" ]; then
+	echo "Failed while detecting a distro package match for specified Docker version '${docker_version}'!"
+	exit 1
+    fi
+
+    echo "${docker_version_match}"
+    
+}
+
+
+###############################################################################
+# Docker volume LVM adjustments done the right way. :\
+###############################################################################
+docker_lvm_thinpool_config() {
+    local docker_version
+    docker_version="$(ec2_tag_get_docker_version)" || exit $?
+
+    docker_repo_yum_create
+    local docker_verison_match
+    docker_version_match="$(docker_version_match_rhel)" || exit $?
+
+    sudo puppet module install puppetlabs/stdlib
+    sudo puppet module install garethr/docker
+
+    tee /tmp/docker_config.pp <<-PUPPET
+class { ::docker:
+  ensure => '${docker_version_match}',
+  repo_opt => '',
+#  tcp_bind => ['tcp://0.0.0.0:2376'],
+#  tls_enable => true,
+#  tls_cacert => '/etc/docker/ca.pem',
+#  tls_cert => '/etc/docker/server.pem',
+#  tls_key => '/etc/docker/server-key.pem',
+  storage_driver => 'devicemapper',
+  storage_vg => 'docker',
+  dm_thinpooldev => '/dev/mapper/docker-thinpool',
+}
+PUPPET
+
+    set +e
+    sudo puppet apply --verbose --detailed-exitcodes /tmp/docker_config.pp
+    set -e
+    sudo puppet apply --verbose --detailed-exitcodes /tmp/docker_config.pp
+
+    sudo systemctl daemon-reload # just in case
+
+    set +e ; sudo systemctl stop docker ; sleep 5; set -e
+
+    sudo rm -rf /var/lib/docker/network
+    sudo ip link del docker0
+    sudo systemctl start docker
+}
+
+
 ################################################################################
 # install specified Docker version
 ################################################################################
-docker_install() {
-    local docker_version="${1}"
+docker_install_tag_version() {
+    local docker_version
+
+    docker_version="$(ec2_tag_get_docker_version)" || exit $?
     wget -O - "https://releases.rancher.com/install-docker/${docker_version}.sh" | sudo bash -
     sudo systemctl restart docker
 }
 
 
 ###############################################################################
+# populate system with Rancher Labs SSH keys
+###############################################################################
+fetch_rancherlabs_ssh_keys() {
+    wget -c -O - \
+	 https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci >> "${HOME}/.ssh/authorized_keys"
+}
+
+
+###############################################################################
+# install things required to work well / work well w/ AWS
+###############################################################################
+system_prep() {
+    local osfamily
+    osfamily="$(get_osfamily)" || exit $?
+
+    case "${osfamily}" in
+	'redhat')
+	    sudo yum remove -y epel-release
+	    sudo yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+	    sudo yum install -y deltarpm
+	    sudo yum upgrade -y
+	    
+	    # if this worked we could have inspec. :\
+	    #	    sudo yum-config-manager --enable rhui-REGION-rhel-server-extras
+	    #	    sudo yum install -y ruby-devel
+	    #	    sudo yum groupinstall -y "Development Tools"
+	    #	    sudo yum install -y gcc-c++ patch readline readline-devel zlib zlib-devel libyaml-devel libffi-devel openssl-devel make bzip2 autoconf automake libtool bison iconv-devel
+	    
+	    sudo yum install --skip-broken -y wget jq python-pip htop puppet python-docutils mosh
+	    sudo puppet resource service puppet ensure=stopped enable=false
+	    sudo pip install awscli
+	    sudo wget -O /usr/local/bin/ec2metadata http://s3.amazonaws.com/ec2metadata/ec2-metadata
+	    sudo chmod +x /usr/local/bin/ec2metadata
+	    ;;
+
+	'debian')
+	    export DEBIAN_FRONTEND=noninteractive
+	    export DEBCONF_NONINTERACTIVE_SEEN=true
+	    sudo apt-get update
+	    sudo apt-get -y upgrade
+	    sudo apt-get install -y jq awscli htop mosh cloud-guest-utils
+	    ;;
+	
+	default)
+	    ;;
+    esac
+}
+
+
+###############################################################################
 # make adjustments to LVM etc for RedHat OS family
 ###############################################################################
-config_for_redhat() {
-    local instance_id
-    local docker_vol_volid
-    local region
+redhat_config() {
 
-    instance_id="$(aws_instance_id)" || exit $?
-    docker_vol_volid="$(aws_addtl_volid)" || exit $?
-    region="$(aws_region)" || exit $?
-
-    sudo aws ec2 attach-volume --region "${region}" --device /dev/xvdb --volume-id "${docker_vol_volid}" --instance-id "${instance_id}"
-
+    # this is pretty ridiculous :\
+    #for file in redhat-rhui-client-config.repo redhat-rhui.repo; do
+    #	sudo sed -i -e 's/sslverify=1/sslverify=0/g' "/etc/yum.repos.d/${file}"
+    #done
+    #    sudo yum remove rh-amazon-rhui-client -y
+    
+    sudo yum clean all -y
+    sudo yum makecache
+    
     sudo yum install -y lvm2
     sudo pvcreate -ff -y /dev/xvdb
     sudo vgcreate docker /dev/xvdb
 
     sudo systemctl restart systemd-udevd.service
     echo "Waiting for storage device mappings to settle..."; sleep 10
-    
+
     sudo lvcreate --wipesignatures y -n thinpool docker -l 95%VG
     sudo lvcreate --wipesignatures y -n thinpoolmeta docker -l 1%VG
     sudo lvconvert -y --zero n -c 512K --thinpool docker/thinpool --poolmetadata docker/thinpoolmeta
-    
-    sudo systemctl stop docker.service
 
     echo 'Modifying Docker config to use LVM thinpool setup...'
     sudo tee /etc/lvm/profile/docker-thinpool.profile <<-EOF
@@ -178,34 +256,6 @@ EOF
 
     sudo lvchange --metadataprofile docker-thinpool docker/thinpool
     sudo lvs -o+seg_monitor
-
-    sudo tee /usr/lib/systemd/system/docker.service <<-EOF
-[Unit]
-Description=Docker Application Container Engine
-Documentation=https://docs.docker.com
-After=network.target docker.socket
-Requires=docker.socket
-[Service]
-Type=notify
-ExecStart=/usr/bin/docker daemon -H fd:// --storage-driver=devicemapper --storage-opt=dm.thinpooldev=/dev/mapper/docker-thinpool --storage-opt=dm.use_deferred_removal=true
-MountFlags=slave
-LimitNOFILE=1048576
-LimitNPROC=1048576
-LimitCORE=infinity
-TimeoutStartSec=0
-Delegate=yes
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    sudo rm -rf /var/lib/docker/network
-    sudo ip link del docker0
-    
-    sudo systemctl daemon-reload
-
-    set +e
-    sudo systemctl restart docker.service; sleep 5; sudo systemctl restart docker.service
-    set -e
 }
 
 
@@ -219,17 +269,13 @@ main() {
     local osfamily
     osfamily="$(get_osfamily)" || exit $?
 
-    echo "Detected osfamily \'${osfamily}\'..."
-
-    local docker_version
-    docker_version="$(get_specified_docker_version)" || exit $?
-    echo "Docker version \'${docker_version}\' specified..."
-    docker_install "${docker_version}"
-
-    # if [ 'redhat' == "${osfamily}" ]; then
-    # 	echo 'Performing special RHEL storage config...'
-    # 	config_for_redhat
-    # fi
+    if [ 'redhat' == "${osfamily}" ]; then
+	echo 'Performing special RHEL osfamily storage config...'
+	redhat_config
+	docker_lvm_thinpool_config
+    else
+	docker_install_tag_version
+    fi
 }
 
 

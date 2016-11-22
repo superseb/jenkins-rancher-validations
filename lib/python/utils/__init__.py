@@ -1,4 +1,4 @@
-import os, sys, fnmatch, numpy, logging, yaml, inspect, requests, boto3
+import os, sys, fnmatch, numpy, logging, yaml, inspect, requests, boto3, time
 
 from plumbum import colors
 from invoke import run, Failure
@@ -6,11 +6,40 @@ from os import walk
 from requests import ConnectionError, HTTPError
 from time import sleep
 from boto3.exceptions import Boto3Error
+from botocore.exceptions import ClientError
 
 
 # This might be bad...assuming that wherever this is running its always going to be
 # TERM=ansi and up to 256 colors.
 colors.use_color = 3
+
+
+#
+def ec2_compute_tags(nodename):
+    # in addition to AWS_TAGS, include a tag for Docker version which will be
+    # referenced by later provisining scripts.
+    docker_version = str(os.environ['RANCHER_DOCKER_VERSION']).rstrip()
+    tags = str(os.environ['AWS_TAGS']).rstrip()
+    tags += ',rancher.docker.version,{}'.format(docker_version)
+    tags += ',Name,{}'.format(nodename)
+    return tag_csv_to_array(tags)
+
+
+#
+def aws_get_region():
+    return str(os.environ['AWS_DEFAULT_REGION']).rstrip()
+
+
+#
+def sts_decode_auth_msg(codedmsg):
+    try:
+        decoded = boto3.client('sts').decode_authorization_message(EncodedMessage=codedmsg)
+    except Boto3Error as e:
+        msg = 'Failed while decoding STS auth msg!: {} :: {}'.format(codedmsg, str(e))
+        log_debug(msg)
+        raise RuntimeError(msg)
+
+    return decoded
 
 
 #
@@ -113,7 +142,7 @@ def request_with_retries(method, url, data={}, step=10, attempts=10):
             if not str(response.status_code).startswith('2'):
                 response.raise_for_status()
             else:
-                return True
+                return response
 
         except (ConnectionError, HTTPError) as e:
             if current_attempts >= attempts:
@@ -124,7 +153,7 @@ def request_with_retries(method, url, data={}, step=10, attempts=10):
                 log_info("Request did not succeeed. Sleeping and trying again... : {}".format(str(e)))
                 sleep(step)
 
-    return True
+    return response
 
 
 #
@@ -201,7 +230,8 @@ def os_to_settings(os):
 
     elif 'rhel-7' in os:
         ami = 'ami-6f68cf0f'
-#        ami = 'ami-99bef1a9'
+        #        ami = 'ami-ca56b5aa'
+        #        ami = 'ami-99bef1a9'
         ssh_username = 'ec2-user'
 
     elif 'rancheros-v06' in os:
@@ -213,13 +243,41 @@ def os_to_settings(os):
         ssh_username = 'core'
 
     else:
-        raise RuntimeError("Unsupported OS specified \'{}\'!".format(os))
+        raise RuntimeError("Unsupported OS specified '{}'!".format(os))
 
     return {'ami-id': ami, 'ssh_username': ssh_username}
 
 
 #
-def aws_ec2_tag_value(nodename, tagname):
+def ec2_wait_for_state(instance, desired_state, timeout=300):
+    steptime = 5
+    actual_state = None
+    nodefilter = [{'Name': 'instance-id', 'Values': [instance]}]
+    ec2 = boto3.client('ec2', region_name=aws_get_region())
+
+    starttime = time.time()
+    while time.time() - starttime < timeout:
+        try:
+            rez = ec2.describe_instances(Filters=nodefilter)['Reservations']
+            if 0 < len(rez):
+                actual_state = rez[0]['Instances'][0]['State']['Name']
+                log_debug("desired state: {} ; actual state: {}".format(desired_state, actual_state))
+                if actual_state == desired_state:
+                    break
+                else:
+                    sleep(steptime)
+            else:
+                log_debug("Not yet able to query instance state...")
+                sleep(steptime)
+
+        except Boto3Error as e:
+            msg = "Failed while querying instance '{}' state!: {}".format(instance, str(e))
+            log_debug(msg)
+            raise RuntimeError(msg)
+
+
+#
+def ec2_tag_value(nodename, tagname):
     log_debug("Looking up tag '{}' for instance '{}'...".format(tagname, nodename))
 
     tagvalue = None
@@ -248,17 +306,14 @@ def aws_ec2_tag_value(nodename, tagname):
 
 
 #
-def aws_instance_id_from_name(name):
-    iid = None
-
+def ec2_instance_id_from_name(name):
     log_debug("Getting metadata for '{}'...".format(name))
 
+    iid = None
+    name_filter = [{'Name': 'tag:Name', 'Values': name}]
+    ec2 = boto3.client('ec2')
+
     try:
-        name_filter = [{
-            'Name': 'tag:Name',
-            'Values': name,
-        }]
-        ec2 = boto3.client('ec2')
         iid = ec2.describe_instances(Filters=name_filter)['Reservations'][0]['Instances'][0]['InstanceId']
     except Boto3Error as e:
         msg = "Failed while querying instance-id for name '{}'! :: {}".format(name, e.message)
@@ -275,7 +330,7 @@ def aws_volid_from_tag(name):
     volid = None
 
     try:
-        volid = aws_ec2_tag_value(name, 'rancherlabs.ci.addtl_volume')
+        volid = ec2_tag_value(name, 'rancherlabs.ci.addtl_volume')
     except RuntimeError as e:
         msg = "Failed to get volid for non-root volume!: {}".format(str(e))
         log_debug(msg)
@@ -285,7 +340,7 @@ def aws_volid_from_tag(name):
 
 
 #
-def deprovision_aws_volume(name, region='us-west-2', zone='a'):
+def ebs_deprovision_volume(name, region='us-west-2', zone='a'):
     log_info("Removing volume '{}' if  it exists...".format(name))
 
     try:
@@ -310,34 +365,40 @@ def deprovision_aws_volume(name, region='us-west-2', zone='a'):
 
 
 #
-def provision_aws_volume(name, region='us-west-2', zone='a', size=20, voltype='gp2', tags='is_ci,true'):
+def tag_csv_to_array(tagcsv):
+    log_debug("Converting tag csv to array: {}".format(tagcsv))
+
+    tag_dict_list = []
+    taglist = tagcsv.split(',')
+    taglist.reverse()
+
+    if 0 != len(taglist) % 2:
+        msg = "AWS_TAGS split on ',' has length {} which makes no sense!".format(str(len(taglist)))
+        log_debug(msg)
+        raise RuntimeError(msg)
+
+    while 0 != len(taglist):
+        tag_dict = {'Key': str(taglist.pop()), 'Value': str(taglist.pop())}
+        tag_dict_list.append(tag_dict)
+
+    return tag_dict_list
+
+
+#
+def ebs_provision_volume(name, region='us-west-2', zone='a', size=20, voltype='gp2', tags='is_ci,true'):
     log_info("Creating EBS volume...")
 
     try:
         ec2 = boto3.resource('ec2', region_name=region)
+        log_debug("Creating EBS volume '{}'...".format(name))
         vol = ec2.create_volume(Size=size, VolumeType=voltype, AvailabilityZone="{}{}".format(region, zone))
         log_info("EBS volume '{}' created...".format(str(vol.id)))
 
-        # tag the volume for easier auditing
-        tag_dict_list = []
-        tags += ",Name,{}".format(name)
-        tag_list = tags.split(',')
-        tag_list.reverse()
+        tags = tag_csv_to_array(tags)
+        log_info("Tagging volume '{}' : '{}'...".format(str(vol.id), tags))
+        ec2.create_tags(Resources=[vol.id], Tags=tags)
 
-        # ugly input validation
-        if 0 != len(tag_list) % 2:
-            msg = "AWS_TAGS split on ',' has length {} which makes no sense!".format(str(len(tag_list)))
-            log_debug(msg)
-            raise RuntimeError(msg)
-
-        while 0 != len(tag_list):
-            tag_dict = {'Key': str(tag_list.pop()), 'Value': str(tag_list.pop())}
-            tag_dict_list.append(tag_dict)
-
-        log_info("Tagging volume '{}' : '{}'...".format(str(vol.id), tag_dict_list))
-        ec2.create_tags(Resources=[vol.id], Tags=tag_dict_list)
-
-    except Boto3Error as e:
+    except (RuntimeError, Boto3Error) as e:
         msg = "Failed while provisioning EBS volme!: {}".format(e.message)
         log_debug(msg)
         raise RuntimeError(msg) from e
@@ -525,3 +586,212 @@ def syntax_check(rootdir, filetypes=[], excludes=[]):
         err_and_exit(str(e))
 
     return True
+
+
+#
+def ec2_ensure_ssh_keypair(nodename):
+    log_debug('Ensuring a ssh keypair exists...')
+
+    try:
+        # create a key pair in the filesystem if one does not already exist
+        if not os.path.isfile('.ssh/{}'.format(nodename)):
+            run('mkdir -p .ssh && rm -rf .ssh/{}'.format(nodename), echo=True)
+            run("ssh-keygen -N '' -C '{}' -f .ssh/{}".format(nodename, nodename), echo=True)
+            run("chmod 0600 .ssh/{}".format(nodename), echo=True)
+
+        # update the key pair in AWS - Yes, Terraform has a Provider for this and Pupupet does not...
+        log_info("Uploading ssh pub key '{}' to AWS...".format(nodename))
+        ec2 = boto3.client('ec2', region_name=str(os.environ['AWS_DEFAULT_REGION']).rstrip())
+        ec2.delete_key_pair(KeyName=nodename)
+
+        pubkey = open('.ssh/{}.pub'.format(nodename), 'r').read()
+        log_debug("pub key: '{}'".format(pubkey))
+
+        #                        WTF??!? Docs say this has to b64 encoded!?!?
+        #                        b64pubkey = base64.b64encode(bytes(pubkey, 'utf-8').ascii())
+        #                        log_debug("base64 pub key: '{}'".format(b64pubkey))
+
+        ec2.import_key_pair(
+            KeyName=nodename,
+            PublicKeyMaterial=pubkey)
+
+    except (Failure, Boto3Error) as e:
+        msg = "Failed while ensuring ssh keypair!: {}".format(str(e))
+        log_debug(msg)
+        raise RuntimeError(msg) from e
+
+    return nodename
+
+
+#
+def ec2_node_ensure(nodename):
+    log_info("Ensuring node '{}'...".format(nodename))
+
+    server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+    os_settings = os_to_settings(server_os)
+    sgids = [str(os.environ['AWS_SECURITY_GROUP_ID']).rstrip()]
+    instance_type = str(os.environ['RANCHER_SERVER_AWS_INSTANCE_TYPE']).rstrip()
+    zone = str(os.environ['AWS_ZONE']).rstrip()
+    region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
+    placement = {'AvailabilityZone': '{}{}'.format(region, zone)}
+    subnetid = str(os.environ['AWS_SUBNET_ID']).rstrip()
+    region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
+
+    custom_vols = None
+
+    network_ifs = [{
+        'DeviceIndex': 0,
+        'SubnetId': subnetid,
+        'AssociatePublicIpAddress': True,
+        'Groups': sgids,
+    }]
+
+    # only intersted in nodes which might have same name and which are running or pending
+    node_filter = [
+        {'Name': 'tag:Name', 'Values': [nodename]},
+        {'Name': 'instance-state-name', 'Values': ['running', 'pending']}
+    ]
+
+    try:
+        ec2 = boto3.client('ec2', region_name=region)
+        instances = ec2.describe_instances(Filters=node_filter)
+        log_debug("instance: {}".format(instances))
+
+        # first check if server(s) by our specified name already exists
+        if 0 != len(instances['Reservations']):
+            msg = "Detected already running instance by name of '{}'...".format(nodename)
+            log_debug(msg)
+            raise RuntimeError(msg)
+
+        # nope, let's go ahead and create one
+        else:
+            keyname = ec2_ensure_ssh_keypair(nodename)
+
+            # yuck
+            iam_profile = boto3.resource('iam').InstanceProfile(str(os.environ['AWS_INSTANCE_PROFILE']))
+            iam_profile = {'Name': iam_profile.name}
+
+            # CoreOS is odd-ball in that it uses a different root volume
+            if 'core' in server_os:
+                custom_vols = [{'DeviceName': '/dev/xvda', 'Ebs': {'VolumeSize': 30}}]
+                log_info("Setting custom root device '{}' for CoreOS...".format(custom_vols))
+
+            # RHEL osfamily needs a second LVM volume for thinpool config
+            if 'rhel' in server_os or 'centos' in server_os:
+                custom_vols = [{
+                    'DeviceName': '/dev/sdb',
+                    'Ebs': {'VolumeSize': 30, 'DeleteOnTermination': True}}]
+                log_info("Creating second volume to host thinpool config for RHEL osfamily: {}".format(custom_vols))
+
+            log_info("Creating Rancher Server '{}'...".format(nodename))
+
+            # have to include block device mapping configs for these OSes and setting
+            # the parameter to None makes the boto3 API unhappy. :\
+            if 'rhel' in server_os or 'centos' in server_os or 'core' in server_os:
+                instance = ec2.run_instances(
+                    ImageId=os_settings['ami-id'],
+                    MinCount=1,
+                    MaxCount=1,
+                    KeyName=keyname,
+                    InstanceType=instance_type,
+                    Placement=placement,
+                    NetworkInterfaces=network_ifs,
+                    IamInstanceProfile=iam_profile,
+                    BlockDeviceMappings=custom_vols)
+            else:
+                instance = ec2.run_instances(
+                    ImageId=os_settings['ami-id'],
+                    MinCount=1,
+                    MaxCount=1,
+                    KeyName=keyname,
+                    InstanceType=instance_type,
+                    Placement=placement,
+                    NetworkInterfaces=network_ifs,
+                    IamInstanceProfile=iam_profile)
+
+            log_debug("run request response for '{}'...".format(instance))
+            log_debug("instance info: {}".format(instance['Instances']))
+
+            instance_id = instance['Instances'][0]['InstanceId']
+            log_info("instance-id of Rancher Server node: {}".format(instance_id))
+
+            tags = ec2_compute_tags(nodename)
+            log_info("Tagging instance '{}' with tags: {}".format(instance_id, tags))
+
+            # give our instance time to enter 'pending' before we try to tag it
+            time.sleep(20)
+            ec2.create_tags(
+                Resources=[instance_id],
+                Tags=tags)
+
+        # waiting for 'running' is the easiest way to eliminate race conditions later
+        log_info("Waiting for node to enter state 'running'...")
+        ec2_wait_for_state(instance_id, 'running')
+
+        public_ip = ec2_node_public_ip(nodename, region)
+        log_info("Node '{}' is available at address '{}'.".format(nodename, public_ip))
+
+    except (ClientError, Boto3Error) as e:
+        addtl_msg = str(e)
+        if 'ClientError' == e.__class__.__name__:
+            errmsg = e.response['Error']['Message']
+            if 'Encoded authorization failure' in errmsg:
+                codedmsg = errmsg.split(':')[1].replace(' ', '')
+                addtl_msg = sts_decode_auth_msg(codedmsg)
+
+                msg = "Failed while provisioning Rancher Server!: {}".format(addtl_msg)
+                log_debug(msg)
+                raise RuntimeError(msg) from e
+
+    return True
+
+
+#
+def ec2_node_public_ip(nodename, region='us-west-2'):
+
+    node_filter = [
+        {'Name': 'tag:Name', 'Values': [nodename]},
+        {'Name': 'instance-state-name', 'Values': ['running', 'pending']}
+    ]
+
+    try:
+        ec2 = boto3.client('ec2', region_name=region)
+        instances = ec2.describe_instances(Filters=node_filter)
+        rez = instances['Reservations']
+        log_debug("reservations: {}".format(rez))
+
+        if len(rez) > 1:
+            raise RuntimeError("Detected more than one reservation matching the filter. That's a problem!")
+        else:
+            pubip = str(rez[0]['Instances'][0]['PublicIpAddress'])
+
+    except (ClientError, Boto3Error) as e:
+        msg = "Failed while getting public IP address for node '{}'!: {}".format(nodename, str(e))
+        log_debug(msg)
+        raise RuntimeError(msg) from e
+
+    return pubip
+
+
+#
+def ec2_node_terminate(nodename, region='us-west-2'):
+    log_info("Terminating instance '{}'..".format(nodename))
+
+    node_filter = [
+        {'Name': 'tag:Name', 'Values': [nodename]},
+        {'Name': 'instance-state-name', 'Values': ['running', 'pending']}
+    ]
+
+    try:
+        ec2 = boto3.client('ec2', region_name=region)
+        rez = ec2.describe_instances(Filters=node_filter)['Reservations']
+
+        for node in range(0, len(rez)):
+            instance_id = rez[0]['Instances'][node]['InstanceId']
+            log_info("Terminated instance-id '{}'...".format(instance_id))
+            ec2.terminate_instances(InstanceIds=[instance_id])
+
+    except Boto3Error as e:
+        msg = "Failed while terminating node '{}'!: {}".format(nodename, str(e))
+        log_debug(msg)
+        raise RuntimeError(msg) from e

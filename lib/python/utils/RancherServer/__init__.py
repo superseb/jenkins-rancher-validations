@@ -1,13 +1,16 @@
-import os
+import os, boto3, time
 
-from invoke import run, Failure
+from invoke import Failure
 from requests import ConnectionError, HTTPError
 from time import sleep
+from boto3.exceptions import Boto3Error
 from botocore.exceptions import ClientError
 
-from .. import log_debug, log_info, request_with_retries, os_to_settings, nuke_aws_keypair, provision_aws_volume
-from .. import deprovision_aws_volume
-from ..DockerMachine import DockerMachine, DockerMachineError
+from .. import log_debug, log_info, log_warn, request_with_retries, os_to_settings
+from .. import sts_decode_auth_msg, ec2_tag_value, aws_get_region, ec2_wait_for_state, ec2_node_ensure, ec2_node_public_ip
+from .. import ec2_compute_tags, ec2_ensure_ssh_keypair
+
+from ..SSH import SSH, SSHError, SCP
 
 
 class RancherServerError(RuntimeError):
@@ -28,7 +31,7 @@ class RancherServer(object):
                                     'AWS_TAGS',
                                     'AWS_VPC_ID',
                                     'AWS_SUBNET_ID',
-                                    'AWS_SECURITY_GROUP',
+                                    'AWS_SECURITY_GROUP_ID',
                                     'AWS_ZONE',
                                     'AWS_INSTANCE_PROFILE',
                                     'RANCHER_SERVER_OPERATINGSYSTEM',
@@ -71,67 +74,81 @@ class RancherServer(object):
 
         #
         def IP(self):
+                log_debug("Getting IP address for node '{}'...".format(self.name()))
+
                 try:
-                        return DockerMachine().IP(self.name())
-                except DockerMachineError as e:
-                        msg = "Failed to resolve IP addr for \'{}\'! : {}".format(self.name(), e.message)
+                        node_filter = [
+                                {'Name': 'tag:Name', 'Values': [self.name()]},
+                                {'Name': 'instance-state-name', 'Values': ['running']}
+                        ]
+
+                        ec2 = boto3.client('ec2', region_name=aws_get_region())
+                        rez = ec2.describe_instances(Filters=node_filter)['Reservations']
+                        ipaddr = str(rez[0]['Instances'][0]['NetworkInterfaces'][0]['Association']['PublicIp'])
+
+                except (ClientError, Boto3Error) as e:
+                        msg = "Failed to resolve IP addr for '{}'!: {}".format(self.name(), str(e))
                         log_debug(msg)
                         raise RancherServerError(msg) from e
 
+                return ipaddr
+
         #
-        def __deprovision_via_puppet(self):
-                try:
-                        run('rm -rf /tmp/puppet', echo=True)
-                        run('mkdir -p /tmp/puppet/modules && cp ./lib/puppet/Puppetfile /tmp/puppet/', echo=True)
-                        run('cd /tmp/puppet && librarian-puppet install --no-verbose --clean --path /tmp/puppet/modules >/dev/null', echo=True)
+        # def validate(self):
+        #         log_info("Validating config of Rancher Server...")
 
-                        manifest = "ec2_instance {{ '{}':\n".format(self.name()) + \
-                                   "  region => 'us-west-2',\n" + \
-                                   "  ensure => absent,\n" + \
-                                   "}"
+        #         server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+        #         os_settings = os_to_settings(server_os)
+        #         ssh_username = os_settings['ssh_username']
 
-                        with open('/tmp/puppet/manifest.pp', 'w') as manifest_file:
-                                manifest_file.write(manifest)
+        #         try:
+        #                 sshcmds = ['gem install inspec --no-ri --no-rdoc']
+        #                 for sshcmd in sshcmds:
+        #                         SSH(self.name(), self.IP(), ssh_username, sshcmd, max_attempts=2)
 
-                        run('puppet apply --modulepath=/tmp/puppet/modules --verbose /tmp/puppet/manifest.pp', echo=True)
+        #                 cmd = 'inspec exec ./lib/inspec/rancher/server.rb ssh://{}@{} -i .ssh/{}'.format(
+        #                         ssh_username,
+        #                         self.IP(),
+        #                         self.name())
+        #                 run(cmd, echo=True)
 
-                except Failure as e:
-                        # These are non-failure exit codes for puppet apply.
-                        if e.result.exited not in [0, 2]:
-                                msg = "Failed during provision of AWS network!: {}".format(str(e))
-                                log_debug(msg)
-                                raise RancherServerError(msg) from e
+        #         except (SSHError, Failure) as e:
+        #                 msg ="Failed during Rancher Server validation!: {}".format(str(e))
+        #                 log_debug(msg)
+        #                 raise RancherServerError(msg)
 
         #
         def deprovision(self):
-                server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
-
-                log_info("Deprovisioning Rancher Server via Docker Machine...")
+                log_info("Deprovisioning Rancher Server '{}'...".format(self.name()))
+                region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
 
                 try:
-                        DockerMachine().rm(self.name())
+                        node_filter = [
+                                {'Name': 'tag:Name', 'Values': [self.name()]},
+                                {'Name': 'instance-state-name', 'Values': ['running']}
+                        ]
 
-                except DockerMachineError as e:
-                        log_debug("Failed to deprovision Rancher Server. This is not an error.: {}".format(str(e)))
+                        ec2 = boto3.client('ec2', region_name=region)
+                        reservations = ec2.describe_instances(Filters=node_filter)['Reservations']
+                        log_debug("reservation info: {}".format(reservations))
 
-                # and then be far less polite
-                try:
-                        log_info("Deprovisioning Rancher Server via Puppet...")
-                        self.__deprovision_via_puppet()
+                        if len(reservations) < 1:
+                                log_info("No nodes matching name '{}' to deprovision.".format(self.name()))
 
-                        log_info("Removing any AWS keypairs for node '{}'...".format(self.name()))
-                        nuke_aws_keypair(self.name())
+                        elif len(reservations) > 1:
+                                log_warn("Found more than one instance matching name '{}'. That's very strange!")
+                                log_warn("Halting deprovisioning. Please resolve naming conclict manually.")
 
-                        if 'rhel' in server_os or 'centos' in server_os:
-                                deprovision_aws_volume("{}-docker".format(self.name()))
-
-                except (ClientError, RancherServerError, RuntimeError) as e:
-                        if 'ClientError' is type(e).__name__:
-                                pass
                         else:
-                                msg = "Failed to deprovision!: {}".format(str(e))
-                                log_debug(msg)
-                                raise RancherServerError(msg) from e
+                                instance_id = reservations[0]['Instances'][0]['InstanceId']
+                                log_info("Deprovisioning '{}'...".format(instance_id))
+                                ec2.terminate_instances(InstanceIds=[instance_id])
+                                ec2.delete_key_pair(KeyName=self.name())
+
+                except (Boto3Error, ClientError) as e:
+                        msg = "Failed while deprovisioning Rancher Server node!: {}".format(str(e))
+                        log_debug(msg)
+                        raise RancherServerError(msg)
 
                 return True
 
@@ -147,87 +164,194 @@ class RancherServer(object):
                         msg = "Timed out waiting for API provider to become available!: {}".format(e.message)
                         log_debug(msg)
                         raise RancherServerError(msg) from e
+                return True
+
+        #
+        def __ensure_rancher_server(self):
+                log_info("Ensuring Rancher Server node '{}'...".format(self.name()))
+
+                # only intersted in nodes which might have same name and which are running or pending
+                node_filter = [
+                        {'Name': 'tag:Name', 'Values': [self.name()]},
+                        {'Name': 'instance-state-name', 'Values': ['running', 'pending']}
+                ]
+
+                try:
+                        ec2 = boto3.client('ec2', region_name=str(os.environ['AWS_DEFAULT_REGION']).rstrip())
+                        instances = ec2.describe_instances(Filters=node_filter)
+                        log_debug("instance: {}".format(instances))
+
+                        # first check if server(s) by our specified name already exists
+                        if 0 != len(instances['Reservations']):
+                                msg = "Detected already running instance by name of '{}'...".format(self.name())
+                                log_debug(msg)
+                                raise RancherServerError(msg)
+
+                        # nope, let's go ahead and create one
+                        else:
+                                keyname = self.__ensure_ssh_keypair()
+
+                                server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+                                os_settings = os_to_settings(server_os)
+                                sgids = [str(os.environ['AWS_SECURITY_GROUP_ID']).rstrip()]
+                                instance_type = str(os.environ['RANCHER_SERVER_AWS_INSTANCE_TYPE']).rstrip()
+                                zone = str(os.environ['AWS_ZONE']).rstrip()
+                                region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
+                                placement = {'AvailabilityZone': '{}{}'.format(region, zone)}
+                                subnetid = str(os.environ['AWS_SUBNET_ID']).rstrip()
+                                custom_vols = None
+
+                                network_ifs = [{
+                                        'DeviceIndex': 0,
+                                        'SubnetId': subnetid,
+                                        'AssociatePublicIpAddress': True,
+                                        'Groups': sgids,
+                                }]
+
+                                # yuck
+                                iam_profile = boto3.resource('iam').InstanceProfile(str(os.environ['AWS_INSTANCE_PROFILE']))
+                                iam_profile = {'Name': iam_profile.name}
+
+                                # CoreOS is odd-ball in that it uses a different root volume
+                                if 'core' in server_os:
+                                        custom_vols = [{'DeviceName': '/dev/xvda', 'Ebs': {'VolumeSize': 30}}]
+                                        log_info("Setting custom root device '{}' for CoreOS...".format(custom_vols))
+
+                                # RHEL osfamily needs a second LVM volume for thinpool config
+                                if 'rhel' in server_os or 'centos' in server_os:
+                                        custom_vols = [{
+                                                'DeviceName': '/dev/sdb',
+                                                'Ebs': {'VolumeSize': 30, 'DeleteOnTermination': True}}]
+                                        log_info("Creating second volume to host thinpool config for RHEL osfamily: {}".format(custom_vols))
+
+                                log_info("Creating Rancher Server '{}'...".format(self.name()))
+
+                                # have to include block device mapping configs for these OSes and setting
+                                # the parameter to None makes the boto3 API unhappy. :\
+                                if 'rhel' in server_os or 'centos' in server_os or 'core' in server_os:
+                                        instance = ec2.run_instances(
+                                                ImageId=os_settings['ami-id'],
+                                                MinCount=1,
+                                                MaxCount=1,
+                                                KeyName=keyname,
+                                                InstanceType=instance_type,
+                                                Placement=placement,
+                                                NetworkInterfaces=network_ifs,
+                                                IamInstanceProfile=iam_profile,
+                                                BlockDeviceMappings=custom_vols)
+                                else:
+                                        instance = ec2.run_instances(
+                                                ImageId=os_settings['ami-id'],
+                                                MinCount=1,
+                                                MaxCount=1,
+                                                KeyName=keyname,
+                                                InstanceType=instance_type,
+                                                Placement=placement,
+                                                NetworkInterfaces=network_ifs,
+                                                IamInstanceProfile=iam_profile)
+
+                                log_debug("run request response for '{}'...".format(instance))
+                                log_debug("instance info: {}".format(instance['Instances']))
+
+                                instance_id = instance['Instances'][0]['InstanceId']
+                                log_info("instance-id of Rancher Server node: {}".format(instance_id))
+
+                                tags = ec2_compute_tags(self.name())
+                                log_info("Tagging instance '{}' with tags: {}".format(instance_id, tags))
+
+                                # give our instance time to enter 'pending' before we try to tag it
+                                time.sleep(10)
+                                ec2.create_tags(
+                                        Resources=[instance_id],
+                                        Tags=tags)
+
+                                # waiting for 'running' is the easiest way to eliminate race conditions later
+                                log_info("Waiting for node to enter state 'running'...")
+                                ec2_wait_for_state(instance_id, 'running')
+
+                except (Boto3Error, ClientError) as e:
+                        addtl_msg = str(e)
+                        if 'ClientError' == e.__class__.__name__:
+                                errmsg = e.response['Error']['Message']
+                                if 'Encoded authorization failure' in errmsg:
+                                        codedmsg = errmsg.split(':')[1].replace(' ', '')
+                                        addtl_msg = sts_decode_auth_msg(codedmsg)
+
+                        msg = "Failed while provisioning Rancher Server!: {}".format(addtl_msg)
+                        log_debug(msg)
+                        raise RancherServerError(msg)
+
+                return True
+
+        #
+        def __install_server_container(self):
+                rancher_version = str(os.environ['RANCHER_VERSION']).rstrip()
+                server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+                os_settings = os_to_settings(server_os)
+
+                log_info('Deploying rancher/server:{}...'.format(rancher_version))
+
+                try:
+                         sshcmd = 'sudo docker run -d -p 8080:8080 --restart=always rancher/server:{}'.format(rancher_version)
+                         SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd)
+
+                except SSHError as e:
+                         msg = "Failed while deploying rancher/server container!: {}".format(str(e))
+                         log_debug(msg)
+                         raise RancherServerError(msg)
+
+        #
+        def __docker_install(self):
+                docker_version = ec2_tag_value(self.name(), 'rancher.docker.version')
+
+                log_info("Installing Docker version '{}'...".format(docker_version))
+
+                try:
+                        server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+                        os_settings = os_to_settings(server_os)
+
+                        SCP(self.name(),
+                            self.IP(),
+                            os_settings['ssh_username'],
+                            './lib/bash/*.sh',
+                            '/tmp/')
+
+                        sshcmd = 'chmod +x /tmp/*.sh && /tmp/rancher_ci_bootstrap.sh'
+                        SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd, max_attempts=1)
+
+                        sshcmd = 'sudo usermod -aG docker $USER'
+                        SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd, max_attempts=2)
+
+                except SSHError as e:
+                        msg = "Failed while installing Docker version {}!: {}".format(docker_version, str(e))
+                        log_debug(msg)
+                        raise RuntimeError(msg) from e
 
                 return True
 
         #
         def provision(self):
                 try:
-                        server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
-                        settings = os_to_settings(server_os)
-                        user = settings['ssh_username']
-                        docker_version = os.environ['RANCHER_DOCKER_VERSION']
-                        rancher_version = os.environ['RANCHER_VERSION']
-                        region = os.environ['AWS_DEFAULT_REGION']
-                        az = os.environ['AWS_ZONE']
-                        puppet_path = None
-                        addtl_volume_id = None
+                        ec2_ensure_ssh_keypair(self.name())
+                        ec2_node_ensure(self.name())
+                        self.__docker_install()
+                        self.__install_server_container()
 
-                        # redhat osfamily needs some volume adjustments
-                        if 'rhel' in server_os or 'centos' in server_os:
-                                addtl_vol_name = "{}-docker".format(self.name())
-                                addtl_volume_id = provision_aws_volume(
-                                        name=addtl_vol_name, region=region, zone=az, tags=os.environ['AWS_TAGS'])
-                                os.environ['AWS_TAGS'] = os.environ['AWS_TAGS'] + ",{},{}".format('rancherlabs.ci.addtl_volume', str(addtl_volume_id))
+                        with open('cattle_test_url', 'w') as f:
+                                f.write("http://{}:8080".format(self.IP()))
 
-                        os.environ['AWS_INSTANCE_TYPE'] = os.environ['RANCHER_SERVER_AWS_INSTANCE_TYPE']
+                        public_ip = ec2_node_public_ip(self.name())
+                        log_info("Rancher Server will be available at 'http://{}:8080' shortly...".format(public_ip))
 
-                        # Create the node with Docker Machine because it does a good job of settings up the TLS
-                        # stuff but we are going to remove the packages and install our specified version over top
-                        # of the old /etc/docker.
-                        DockerMachine().create(self.name())
-
-                        log_info("Rancher Server node is available for SSH at \'{}\'...".format(self.IP()))
-
-                        if 'rhel' in server_os or 'centos' in server_os:
-                                DockerMachine().ssh(self.name(), 'sudo yum install -y wget')
-
-                        self.__add_ssh_keys()
-
-                        #
-                        log_info("Starting Rancher server...")
-                        DockerMachine().ssh(self.name(), '\'echo "usermod -a -G docker $USER" | sudo -E -s\'')
-                        DockerMachine().ssh(
-                                self.name(), "docker run -d --restart=always --name=rancher_server_{} -p 8080:8080 rancher/server:{}".format(
-                                        rancher_version,
-                                        rancher_version))
-
-                        log_info("Rancher node hosting rancher/server will soon be available at http://{}:8080".format(self.IP()))
-                        log_info("WARNING: You may need to poll API endpoints until they are available!")
-
-                        with open('cattle_test_url', 'w') as cattle_test_url:
-                                cattle_test_url.write("http://{}:8080".format(self.IP()))
-
-                except (RancherServerError, DockerMachineError) as e:
-                        msg = "Failed to provision \'{}\'!: {}".format(self.name(), e.message)
+                except RuntimeError as e:
+                        msg = "Failed while provisining Rancher Server!: {}".format(str(e))
                         log_debug(msg)
                         raise RancherServerError(msg) from e
-
-                return True
-
-        #
-        def __add_ssh_keys(self):
-                log_info("Populating {} with Rancher Labs ssh keys...".format(self.name()))
-                ssh_key_urls = ['https://raw.githubusercontent.com/rancherlabs/ssh-pub-keys/master/ssh-pub-keys/ci']
-                server_os = os.environ['RANCHER_SERVER_OPERATINGSYSTEM']
-                settings = os_to_settings(server_os)
-                ssh_username = settings['ssh_username']
-                ssh_auth = "~/.ssh/authorized_keys"
-
-                for keyset in ssh_key_urls:
-                        try:
-                                cmd = "'wget {} -O - >> {} && chmod 0600 {}'".format(keyset, ssh_auth, ssh_auth)
-                                DockerMachine().ssh(self.name(), cmd)
-
-                        except DockerMachineError as e:
-                                msg = "Failed while adding ssh keys! : {}".format(e.message)
-                                log_debug(msg)
-                                raise RancherServerError(msg) from e
-                return True
 
         #
         def __set_reg_token(self):
                 log_info("Setting the initial agent reg token...")
+
                 reg_url = "http://{}:8080/v2-beta/projects/1a5/registrationtokens".format(self.IP())
                 try:
                         response = request_with_retries('POST', reg_url, step=20, attempts=20)
@@ -241,8 +365,24 @@ class RancherServer(object):
                 return True
 
         #
+        def reg_command(self):
+                try:
+                        query_url = "http://{}:8080/v2-beta/projects/1a5/registrationtokens?state=active&limit=-1&sort=name".format(self.IP())
+                        response = request_with_retries('GET', query_url)
+                        reg_command = response.json()['data'][0]['command']
+                        log_debug("reg command: {}".format(reg_command))
+
+                except (IndexError, KeyError, RancherServerError) as e:
+                        msg = "Failed while retrieving registration command!: {}".format(str(e))
+                        log_debug(msg)
+                        raise RancherServerError(msg) from e
+
+                return reg_command
+
+        #
         def __set_reg_url(self):
                 log_info("Setting the agent registration URL...")
+
                 reg_url = "http://{}:8080/v2-beta/settings/api.host".format(self.IP())
                 try:
                         request_data = {
