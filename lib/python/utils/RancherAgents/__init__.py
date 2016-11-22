@@ -172,19 +172,19 @@ class RancherAgents(object):
                 return True
 
         #
-        def __ensure_rancher_agents_container(self, reg_url):
+        def __ensure_rancher_agents_container(self):
                 region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
                 agent_os = str(os.environ['RANCHER_AGENT_OPERATINGSYSTEM']).rstrip()
                 os_settings = os_to_settings(agent_os)
                 ssh_user = os_settings['ssh_username']
 
                 try:
+                        reg_command = RancherServer().reg_command()
                         addr = ec2_node_public_ip(agentname, region=region)
-                        sshcmd = "sudo docker run -d -p 8080:8080 --restart=always rancher/server:{}".format(rancher_version)
-                        SSH(agentname, addr, ssh_user, 'chmod +x /tmp/*.sh && /tmp/rancher_ci_bootstrap.sh')
+                        SSH(agent, addr, ssh_user, reg_command)
 
-                except SSHError as e:
-                        msg = "Failed while launcing rancher/server!: {}".format(str(e))
+                except (RancherServerError, SSHError) as e:
+                        msg = "Failed while launcing Rancher Agent container!: {}".format(str(e))
                         log_debug(msg)
                         raise RancherAgentsError(msg) from e
 
@@ -195,7 +195,8 @@ class RancherAgents(object):
                 try:
                         self.__ensure_rancher_agents()
                         self.__ensure_agents_docker()
-#                        self.__ensure_rancher_agents_container()
+                        self.__ensure_rancher_agents_container()
+                        self.__wait_on_active_agents(3)
                 except RancherAgentsError as e:
                         msg = "Failed while provisioning Rancher Agents!: {}".format(str(e))
                         log_debug(msg)

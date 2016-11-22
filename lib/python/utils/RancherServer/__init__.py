@@ -358,14 +358,19 @@ class RancherServer(object):
                 return True
 
         #
-        def reg_url(self):
+        def reg_command(self):
                 try:
                         query_url = "http://{}:8080/v2-beta/projects/1a5/registrationtokens?state=active&limit=-1&sort=name".format(self.IP())
                         response = request_with_retries('GET', query_url)
-                except RancherServerError as e:
+                        reg_command = response.json()['data'][0]['command']
+                        log_debug("reg command: {}".format(reg_command))
+
+                except (IndexError, KeyError, RancherServerError) as e:
                         msg = "Failed while retrieving registration URL!: {}".format(str(e))
                         log_debug(msg)
-                        raise RancherServerError(msg)
+                        raise RancherServerError(msg) from e
+
+                return reg_command
 
         #
         def __set_reg_url(self):
