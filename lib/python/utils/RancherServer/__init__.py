@@ -319,20 +319,18 @@ class RancherServer(object):
                             './lib/bash/*.sh',
                             '/tmp/')
 
-                        # among other things, need to setup the thinpool vol before docker install
-                        if 'rhel' in server_os or 'centos' in server_os:
-                                sshcmd = 'chmod +x /tmp/*.sh && /tmp/rancher_ci_bootstrap.sh'
-                                SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd)
+                        sshcmd = 'chmod +x /tmp/*.sh && /tmp/rancher_ci_bootstrap.sh'
+                        SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd, max_attempts=1)
 
-                        sshcmd = 'chmod +x /tmp/*.sh && /tmp/docker_version_from_aws_tag.sh'
-                        result = SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd)
+                        sshcmd = 'sudo usermod -aG docker $USER'
+                        SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd, max_attempts=2)
 
                 except SSHError as e:
                         msg = "Failed while installing Docker version {}!: {}".format(docker_version, str(e))
                         log_debug(msg)
                         raise RancherServerError(msg)
 
-                return result
+                return True
 
         #
         def __install_rancher_server_container(self):
@@ -343,7 +341,7 @@ class RancherServer(object):
                 log_info('Deploying rancher/server:{}...'.format(rancher_version))
 
                 try:
-                         sshcmd = 'sudo docker run -d -p 8080:8080 --restart=always rancher/server:{}'.format(rancher_version)
+                         sshcmd = 'docker run -d -p 8080:8080 --restart=always rancher/server:{}'.format(rancher_version)
                          SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd)
 
                 except SSHError as e:

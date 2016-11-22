@@ -217,6 +217,7 @@ def os_to_settings(os):
         ssh_username = 'centos'
 
     elif 'rhel-7' in os:
+#        ami = 'ami-ca56b5aa'
         ami = 'ami-6f68cf0f'
 #        ami = 'ami-99bef1a9'
         ssh_username = 'ec2-user'
