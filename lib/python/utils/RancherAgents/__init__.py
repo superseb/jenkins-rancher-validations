@@ -1,10 +1,9 @@
-import os, requests
+import os
+
 from invoke import run, Failure
 from time import sleep, time
-from requests import ConnectionError, HTTPError
-from .. import log_info, log_debug, os_to_settings, nuke_aws_keypair, request_with_retries
-from .. import ebs_provision_volume, ebs_deprovision_volume, ec2_node_ensure, ec2_node_public_ip
-from .. import ec2_node_terminate, ec2_node_public_ip
+from .. import log_info, log_debug, os_to_settings, nuke_aws_keypair
+from .. import ec2_node_ensure, ec2_node_terminate, ec2_node_public_ip
 
 from ..RancherServer import RancherServer, RancherServerError
 from ..SSH import SSH, SCP, SSHError
@@ -177,11 +176,15 @@ class RancherAgents(object):
                 agent_os = str(os.environ['RANCHER_AGENT_OPERATINGSYSTEM']).rstrip()
                 os_settings = os_to_settings(agent_os)
                 ssh_user = os_settings['ssh_username']
+                agent_prefix = self.__agent_name_prefix()
 
                 try:
                         reg_command = RancherServer().reg_command()
-                        addr = ec2_node_public_ip(agentname, region=region)
-                        SSH(agent, addr, ssh_user, reg_command)
+
+                        for agent in range(0,3):
+                                agent_name = agent_prefix + str(agent)
+                                addr = ec2_node_public_ip(agent_name, region=region)
+                                SSH(agent, addr, ssh_user, reg_command)
 
                 except (RancherServerError, SSHError) as e:
                         msg = "Failed while launcing Rancher Agent container!: {}".format(str(e))
