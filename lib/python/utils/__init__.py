@@ -590,7 +590,7 @@ def syntax_check(rootdir, filetypes=[], excludes=[]):
 
 #
 def ec2_ensure_ssh_keypair(nodename):
-    log_debug('Ensuring an ssh keypair exists...')
+    log_debug('Ensuring a ssh keypair exists...')
 
     try:
         # create a key pair in the filesystem if one does not already exist
@@ -599,21 +599,21 @@ def ec2_ensure_ssh_keypair(nodename):
             run("ssh-keygen -N '' -C '{}' -f .ssh/{}".format(nodename, nodename), echo=True)
             run("chmod 0600 .ssh/{}".format(nodename), echo=True)
 
-            # update the key pair in AWS - Yes, Terraform has a Provider for this and Pupupet does not...
-            log_info("Uploading ssh pub key '{}' to AWS...".format(nodename))
-            ec2 = boto3.client('ec2', region_name=str(os.environ['AWS_DEFAULT_REGION']).rstrip())
-            ec2.delete_key_pair(KeyName=nodename)
+        # update the key pair in AWS - Yes, Terraform has a Provider for this and Pupupet does not...
+        log_info("Uploading ssh pub key '{}' to AWS...".format(nodename))
+        ec2 = boto3.client('ec2', region_name=str(os.environ['AWS_DEFAULT_REGION']).rstrip())
+        ec2.delete_key_pair(KeyName=nodename)
 
-            pubkey = open('.ssh/{}.pub'.format(nodename), 'r').read()
-            log_debug("pub key: '{}'".format(pubkey))
+        pubkey = open('.ssh/{}.pub'.format(nodename), 'r').read()
+        log_debug("pub key: '{}'".format(pubkey))
 
-            #                        WTF??!? Docs say this has to b64 encoded!?!?
-            #                        b64pubkey = base64.b64encode(bytes(pubkey, 'utf-8').ascii())
-            #                        log_debug("base64 pub key: '{}'".format(b64pubkey))
+        #                        WTF??!? Docs say this has to b64 encoded!?!?
+        #                        b64pubkey = base64.b64encode(bytes(pubkey, 'utf-8').ascii())
+        #                        log_debug("base64 pub key: '{}'".format(b64pubkey))
 
-            ec2.import_key_pair(
-                KeyName=nodename,
-                PublicKeyMaterial=pubkey)
+        ec2.import_key_pair(
+            KeyName=nodename,
+            PublicKeyMaterial=pubkey)
 
     except (Failure, Boto3Error) as e:
         msg = "Failed while ensuring ssh keypair!: {}".format(str(e))
@@ -624,11 +624,11 @@ def ec2_ensure_ssh_keypair(nodename):
 
 
 #
-def ec2_ensure_node(nodename):
+def ec2_node_ensure(nodename):
     log_info("Ensuring node '{}'...".format(nodename))
 
     server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
-    os_settings = os_to_settings('server_os')
+    os_settings = os_to_settings(server_os)
     sgids = [str(os.environ['AWS_SECURITY_GROUP_ID']).rstrip()]
     instance_type = str(os.environ['RANCHER_SERVER_AWS_INSTANCE_TYPE']).rstrip()
     zone = str(os.environ['AWS_ZONE']).rstrip()
@@ -715,7 +715,7 @@ def ec2_ensure_node(nodename):
             instance_id = instance['Instances'][0]['InstanceId']
             log_info("instance-id of Rancher Server node: {}".format(instance_id))
 
-            tags = ec2_compute_tags()
+            tags = ec2_compute_tags(nodename)
             log_info("Tagging instance '{}' with tags: {}".format(instance_id, tags))
 
             # give our instance time to enter 'pending' before we try to tag it
@@ -741,3 +741,54 @@ def ec2_ensure_node(nodename):
                 raise RuntimeError(msg) from e
 
     return True
+
+
+#
+def ec2_node_public_ip(nodename, region='us-west-2'):
+
+    node_filter = [
+        {'Name': 'tag:Name', 'Values': [nodename]},
+        {'Name': 'instance-state-name', 'Values': ['running', 'pending']}
+    ]
+
+    try:
+        ec2 = boto3.client('ec2', region_name=region)
+        instances = ec2.describe_instances(Filters=node_filter)
+        rez = instances['Reservations']
+        log_debug("reservations: {}".format(rez))
+
+        if len(rez) > 1:
+            raise RuntimeError("Detected more than one reservation matching the filter. That's a problem!")
+        else:
+            pubip = str(rez[0]['Instances'][0]['PublicIpAddress'])
+
+    except (ClientError, Boto3Error) as e:
+        msg = "Failed while getting public IP address for node '{}'!: {}".format(nodename, str(e))
+        log_debug(msg)
+        raise RuntimeError(msg) from e
+
+    return pubip
+
+
+#
+def ec2_node_terminate(nodename, region='us-west-2'):
+    log_info("Terminating instance '{}'..".format(nodename))
+
+    node_filter = [
+        {'Name': 'tag:Name', 'Values': [nodename]},
+        {'Name': 'instance-state-name', 'Values': ['running', 'pending']}
+    ]
+
+    try:
+        ec2 = boto3.client('ec2', region_name=region)
+        rez = ec2.describe_instances(Filters=node_filter)['Reservations']
+
+        for node in range(0, len(rez)):
+            instance_id = rez[0]['Instances'][node]['InstanceId']
+            log_info("Terminated instance-id '{}'...".format(instance_id))
+            ec2.terminate_instances(InstanceIds=[instance])
+
+    except Boto3Error as e:
+        msg = "Failed while terminating node '{}'!: {}".format(nodename, str(e))
+        log_debug(msg)
+        raise RuntimeError(msg) from e

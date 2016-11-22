@@ -1,14 +1,14 @@
 import os, boto3, time
 
-from invoke import run, Failure
+from invoke import Failure
 from requests import ConnectionError, HTTPError
 from time import sleep
 from boto3.exceptions import Boto3Error
 from botocore.exceptions import ClientError
 
 from .. import log_debug, log_info, log_warn, request_with_retries, os_to_settings
-from .. import sts_decode_auth_msg, ec2_tag_value, aws_get_region
-from .. import ec2_wait_for_state, ec2_ensure_node, ec2_compute_tags, ec2_ensure_ssh_keypair
+from .. import sts_decode_auth_msg, ec2_tag_value, aws_get_region, ec2_wait_for_state, ec2_node_ensure
+from .. import ec2_compute_tags, ec2_ensure_ssh_keypair
 
 from ..SSH import SSH, SSHError, SCP
 
@@ -167,40 +167,6 @@ class RancherServer(object):
                 return True
 
         #
-        def __ensure_ssh_keypair(self):
-                log_debug('Ensuring an ssh keypair exists...')
-
-                try:
-                        # create a key pair in the filesystem if one does not already exist
-                        if not os.path.isfile('.ssh/{}'.format(self.name)):
-                                run('mkdir -p .ssh && rm -rf .ssh/{}'.format(self.name()), echo=True)
-                                run("ssh-keygen -N '' -C '{}' -f .ssh/{}".format(self.name(), self.name()), echo=True)
-                                run("chmod 0600 .ssh/{}".format(self.name()), echo=True)
-
-                        # update the key pair in AWS - Yes, Terraform has a Provider for this and Pupupet does not...
-                        log_info("Uploading ssh pub key '{}' to AWS...".format(self.name()))
-                        ec2 = boto3.client('ec2', region_name=str(os.environ['AWS_DEFAULT_REGION']).rstrip())
-                        ec2.delete_key_pair(KeyName=self.name())
-
-                        pubkey = open('.ssh/{}.pub'.format(self.name()), 'r').read()
-                        log_debug("pub key: '{}'".format(pubkey))
-
-#                        WTF??!? Docs say this has to b64 encoded!?!?
-#                        b64pubkey = base64.b64encode(bytes(pubkey, 'utf-8').ascii())
-#                        log_debug("base64 pub key: '{}'".format(b64pubkey))
-
-                        ec2.import_key_pair(
-                                KeyName=self.name(),
-                                PublicKeyMaterial=pubkey)
-
-                except (Failure, Boto3Error) as e:
-                        msg = "Failed while ensuring ssh keypair!: {}".format(str(e))
-                        log_debug(msg)
-                        raise RancherServerError(msg) from e
-
-                return self.name()
-
-        #
         def __ensure_rancher_server(self):
                 log_info("Ensuring Rancher Server node '{}'...".format(self.name()))
 
@@ -318,7 +284,24 @@ class RancherServer(object):
                 return True
 
         #
-        def __install_docker(self):
+        def __install_server_container(self):
+                rancher_version = str(os.environ['RANCHER_VERSION']).rstrip()
+                server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+                os_settings = os_to_settings(server_os)
+
+                log_info('Deploying rancher/server:{}...'.format(rancher_version))
+
+                try:
+                         sshcmd = 'sudo docker run -d -p 8080:8080 --restart=always rancher/server:{}'.format(rancher_version)
+                         SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd)
+
+                except SSHError as e:
+                         msg = "Failed while deploying rancher/server container!: {}".format(str(e))
+                         log_debug(msg)
+                         raise RancherServerError(msg)
+
+        #
+        def __docker_install(self):
                 docker_version = ec2_tag_value(self.name(), 'rancher.docker.version')
 
                 log_info("Installing Docker version '{}'...".format(docker_version))
@@ -342,32 +325,21 @@ class RancherServer(object):
                 except SSHError as e:
                         msg = "Failed while installing Docker version {}!: {}".format(docker_version, str(e))
                         log_debug(msg)
-                        raise RancherServerError(msg)
+                        raise RuntimeError(msg) from e
 
                 return True
 
         #
-        def __install_rancher_server_container(self):
-                rancher_version = str(os.environ['RANCHER_VERSION']).rstrip()
-                server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
-                os_settings = os_to_settings(server_os)
-
-                log_info('Deploying rancher/server:{}...'.format(rancher_version))
-
-                try:
-                         sshcmd = 'sudo docker run -d -p 8080:8080 --restart=always rancher/server:{}'.format(rancher_version)
-                         SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd)
-
-                except SSHError as e:
-                         msg = "Failed while deploying rancher/server container!: {}".format(str(e))
-                         log_debug(msg)
-                         raise RancherServerError(msg)
-
-        #
         def provision(self):
-                ec2_ensure_node(self.name())
-                ec2_ensure_ssh_keypair(self.name())
-                self.__rancher_install_server(self.name())
+                try:
+                        ec2_ensure_ssh_keypair(self.name())
+                        ec2_node_ensure(self.name())
+                        self.__docker_install()
+                        self.__install_server_container()
+                except RuntimeError as e:
+                        msg = "Failed while provisining Rancher Server!: {}".format(str(e))
+                        log_debug(msg)
+                        raise RancherServerError(msg) from e
 
         #
         def __set_reg_token(self):
@@ -384,6 +356,16 @@ class RancherServer(object):
                 log_debug("reg token response: {}".format(response))
                 log_info('Sucesssfully set the initial agent reg token.')
                 return True
+
+        #
+        def reg_url(self):
+                try:
+                        query_url = "http://{}:8080/v2-beta/projects/1a5/registrationtokens?state=active&limit=-1&sort=name".format(self.IP())
+                        response = request_with_retries('GET', query_url)
+                except RancherServerError as e:
+                        msg = "Failed while retrieving registration URL!: {}".format(str(e))
+                        log_debug(msg)
+                        raise RancherServerError(msg)
 
         #
         def __set_reg_url(self):

@@ -2,10 +2,12 @@ import os, requests
 from invoke import run, Failure
 from time import sleep, time
 from requests import ConnectionError, HTTPError
-
 from .. import log_info, log_debug, os_to_settings, nuke_aws_keypair, request_with_retries
-from .. import ebs_provision_volume, ebs_deprovision_volume
+from .. import ebs_provision_volume, ebs_deprovision_volume, ec2_node_ensure, ec2_node_public_ip
+from .. import ec2_node_terminate, ec2_node_public_ip
+
 from ..RancherServer import RancherServer, RancherServerError
+from ..SSH import SSH, SCP, SSHError
 
 
 class RancherAgentsError(RuntimeError):
@@ -26,7 +28,7 @@ class RancherAgents(object):
                                     'AWS_TAGS',
                                     'AWS_VPC_ID',
                                     'AWS_SUBNET_ID',
-                                    'AWS_SECURITY_GROUP',
+                                    'AWS_SECURITY_GROUP_ID',
                                     'AWS_ZONE',
                                     'AWS_INSTANCE_PROFILE',
                                     'RANCHER_AGENT_OPERATINGSYSTEM',
@@ -49,7 +51,7 @@ class RancherAgents(object):
                self.__validate_envvars()
 
         #
-        def __get_agent_name_prefix(self):
+        def __agent_name_prefix(self):
                 n = ''
                 prefix = os.environ.get('AWS_PREFIX')
                 rancher_version = os.environ['RANCHER_VERSION'].replace('.', '')
@@ -68,7 +70,7 @@ class RancherAgents(object):
         def __get_agent_names(self, count):
                 agent_names = []
                 for i in list(range(count)):
-                        agent_names.append("{}{}".format(self.__get_agent_name_prefix(), i))
+                        agent_names.append("{}{}".format(self.__agent_name_prefix(), i))
                 return agent_names
 
         #
@@ -119,12 +121,6 @@ class RancherAgents(object):
                                 msg = "Failed to deprovision agent '{}'. This is not fatal.".format(agent_id)
                                 log_info(msg)
                 return True
-
-        #
-        def __compute_tags(self):
-                tags = os.environ['AWS_TAGS']
-                tags += ",rancher.docker.version,{}".format(os.environ['RANCHER_DOCKER_VERSION'])
-                return tags
 
         #
         # def __provision_via_rancher_api(self):
@@ -306,34 +302,68 @@ class RancherAgents(object):
 
         #
         def __ensure_rancher_agents(self):
+                max_attempts = 10
+                attempts = 0
                 agents = 0
-                successes = 0
-                agent_name_prefix = self.__get_agent_name_prefix()
+                agent_name_prefix = self.__agent_name_prefix()
 
-                while agents <= 9:
+                while attempts < max_attempts:
                         result = False
-                        agents += 1
-                        agent_name = agent_name_prefix + '-agent{}'.format(agents)
+                        agent_name = agent_name_prefix + str(agents)
 
-                        result = ec2_ensure_node(agent_name)
+                        attempts += 1
 
-                        if True is result:
-                                successes += 1
+                        try:
+                                log_info("Provisioning agent '{}'...".format(agent_name))
+                                if True is ec2_node_ensure(agent_name):
+                                        agents += 1
 
-                        if successes >= 3:
-                                log_info("Successful provisioning of 3 agents.")
+                        except RuntimeError as e:
+                                msg = "Failed while provisioning agent '{}'...".format(agent_name)
+                                log_debug(msg)
+
+                        if agents >= 3 or attempts >= max_attempts:
                                 break
 
-                if successes >= 3:
+                if agents >= 3:
                         return True
                 else:
                         msg = "Failed to provision 3 agents after 10 attempts! Giving up..."
                         log_debug(msg)
-                        raise RacherAgentsError(msg)
+                        raise RancherAgentsError(msg)
+
+        #
+        def __install_docker(self, agentname):
+                region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
+                agent_os = str(os.environ['RANCHER_AGENT_OPERATINGSYSTEM']).rstrip()
+                os_settings = os_to_settings(agent_os)
+                ssh_user = os_settings['ssh_username']
+
+                try:
+                        addr = ec2_node_public_ip(agentname, region=region)
+
+                        SCP(agentname, addr, ssh_user, './lib/bash/*.sh', '/tmp/')
+                        SSH(agentname, addr, ssh_user, 'chmod +x /tmp/*.sh && /tmp/rancher_ci_bootstrap.sh')
+
+                except SSHError as e:
+                        msg = "Failed while Dockerizing Rancher Agent '{}'!: {}".format(agentname, str(e))
+                        log_debug(msg)
+                        raise RancherAgentsError(msg) from e
 
         #
         def __ensure_agents_docker(self):
-                pass
+                agent_prefix = self.__agent_name_prefix()
+
+                try:
+                        for agent in range(1, 3):
+                                agent_name = agent_prefix + str(agent)
+                                log_info("Installing Docker on Rancher Agent '{}'...".format(agent_name))
+                                self.__install_docker(agent_name)
+
+                except RancherAgentsError as e:
+                        msg = "Failed while Dockerizing Rancher Agents!: {}".format(str(e))
+                        log_debug(msg)
+                        raise RancherAgentsError(msg) from e
 
         #
         def __ensure_rancher_agents_container(self):
@@ -399,27 +429,19 @@ class RancherAgents(object):
 
         #
         def deprovision(self):
-                try:
-                        self.__deprovision_via_rancher_api()
-                except RancherAgentsError as e:
-                        msg = "Failed while deprovisioning Rancher Agents!: {}".format(str(e))
-                        log_debug(msg)
-                        raise RancherAgentsError(msg) from e
+                log_info("Deprovisioning Rancher Agents...")
+
+                region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
 
                 try:
-                        # then get progressively more rude since Docker Machine is ridiculous
-                        log_info("Deprovisioning Rancher Agents via Puppet...")
-                        self.__deprovision_via_puppet()
+                        for agent in range(0, 3):
+                                agent_name = self.__agent_name_prefix() + str(agent)
+                                ec2_node_terminate(agent_name, region=region)
+                                nuke_aws_keypair(agent_name)
 
-                        for agent in self.__get_agent_names(20):
-                                log_info("Nuking any lingering Agent AWS keypairs for node '{}'...".format(agent))
-                                nuke_aws_keypair(agent)
-                                log_info("Removing vol '{}-docker' if it exists...".format(agent))
-                                ebs_deprovision_volume("{}-docker".format(agent))
-
-                except (RancherServerError, RuntimeError) as e:
-                        msg = "Failed with deprovisining agent!: {}".format(str(e))
-                        log_debug(msg)
-                        raise RancherAgentsError(msg) from e
+                except (RancherAgentsError, RuntimeError) as e:
+                        msg = "Failed with deprovisioning agent!: {}".format(str(e))
+                        log_info(msg)
+                        log_info("Proceeding to name agent...")
 
                 return True
