@@ -35,7 +35,7 @@ class SSH(object):
 
             except Failure as e:
                 msg = "ssh command failed!: {} :: {}".format(e.result.return_code, e.result.stderr)
-                log_debug(msg)
+                log_info(msg)
                 time.sleep(30)
 
         if attempts >= max_attempts:
@@ -78,7 +78,7 @@ class SCP(object):
 
         if attempts >= max_attempts:
             msg = "SCP command exceeded max attempts!"
-            log_debug(msg)
+            log_info(msg)
             raise SSHError(msg)
 
         if result.ok:
