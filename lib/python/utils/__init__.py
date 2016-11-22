@@ -715,11 +715,13 @@ def ec2_node_ensure(nodename):
             instance_id = instance['Instances'][0]['InstanceId']
             log_info("instance-id of Rancher Server node: {}".format(instance_id))
 
+            # we have to sleep for a bit before we start asking for node metadata
+            time.sleep(20)
+
             tags = ec2_compute_tags(nodename)
             log_info("Tagging instance '{}' with tags: {}".format(instance_id, tags))
 
             # give our instance time to enter 'pending' before we try to tag it
-            time.sleep(20)
             ec2.create_tags(
                 Resources=[instance_id],
                 Tags=tags)
@@ -727,6 +729,8 @@ def ec2_node_ensure(nodename):
         # waiting for 'running' is the easiest way to eliminate race conditions later
         log_info("Waiting for node to enter state 'running'...")
         ec2_wait_for_state(instance_id, 'running')
+
+        sleep(5)
 
         public_ip = ec2_node_public_ip(nodename, region)
         log_info("Node '{}' is available at address '{}'.".format(nodename, public_ip))
