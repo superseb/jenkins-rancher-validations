@@ -172,6 +172,8 @@ class RancherAgents(object):
 
         #
         def __ensure_rancher_agents_container(self):
+                log_info("Deploying Rancher Agent container...")
+
                 region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
                 agent_os = str(os.environ['RANCHER_AGENT_OPERATINGSYSTEM']).rstrip()
                 os_settings = os_to_settings(agent_os)
@@ -181,10 +183,10 @@ class RancherAgents(object):
                 try:
                         reg_command = RancherServer().reg_command()
 
-                        for agent in range(0,3):
+                        for agent in range(0, 3):
                                 agent_name = agent_prefix + str(agent)
                                 addr = ec2_node_public_ip(agent_name, region=region)
-                                SSH(agent, addr, ssh_user, reg_command)
+                                SSH(agent_name, addr, ssh_user, reg_command)
 
                 except (RancherServerError, SSHError) as e:
                         msg = "Failed while launcing Rancher Agent container!: {}".format(str(e))

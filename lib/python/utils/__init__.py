@@ -142,7 +142,7 @@ def request_with_retries(method, url, data={}, step=10, attempts=10):
             if not str(response.status_code).startswith('2'):
                 response.raise_for_status()
             else:
-                return True
+                return response
 
         except (ConnectionError, HTTPError) as e:
             if current_attempts >= attempts:
@@ -153,7 +153,7 @@ def request_with_retries(method, url, data={}, step=10, attempts=10):
                 log_info("Request did not succeeed. Sleeping and trying again... : {}".format(str(e)))
                 sleep(step)
 
-    return True
+    return response
 
 
 #
@@ -719,14 +719,17 @@ def ec2_node_ensure(nodename):
             log_info("Tagging instance '{}' with tags: {}".format(instance_id, tags))
 
             # give our instance time to enter 'pending' before we try to tag it
-            time.sleep(10)
+            time.sleep(20)
             ec2.create_tags(
                 Resources=[instance_id],
                 Tags=tags)
 
-            # waiting for 'running' is the easiest way to eliminate race conditions later
-            log_info("Waiting for node to enter state 'running'...")
-            ec2_wait_for_state(instance_id, 'running')
+        # waiting for 'running' is the easiest way to eliminate race conditions later
+        log_info("Waiting for node to enter state 'running'...")
+        ec2_wait_for_state(instance_id, 'running')
+
+        public_ip = ec2_node_public_ip(nodename, region)
+        log_info("Node '{}' is available at address '{}'.".format(nodename, public_ip))
 
     except (ClientError, Boto3Error) as e:
         addtl_msg = str(e)

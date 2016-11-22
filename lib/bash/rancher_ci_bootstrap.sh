@@ -31,7 +31,7 @@ get_osfamily() {
 aws_region() {
     local region
 
-    region="$(ec2metadata -z | cut -f2 -d' ' | sed -e 's/.$//g')" || exit $?
+    region="$(ec2metadata --availability-zone | cut -f2 -d' ' | sed -e 's/.$//g')" || exit $?
 
     if [ -z "${region}" ]; then
 	echo 'Failed to query AWS region!'
@@ -206,6 +206,15 @@ system_prep() {
 	    sudo wget -O /usr/local/bin/ec2metadata http://s3.amazonaws.com/ec2metadata/ec2-metadata
 	    sudo chmod +x /usr/local/bin/ec2metadata
 	    ;;
+
+	'debian')
+	    export DEBIAN_FRONTEND=noninteractive
+	    export DEBCONF_NONINTERACTIVE_SEEN=true
+	    sudo apt-get update
+	    sudo apt-get -y upgrade
+	    sudo apt-get install -y jq awscli htop mosh cloud-guest-utils
+	    ;;
+	
 	default)
 	    ;;
     esac

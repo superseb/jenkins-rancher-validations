@@ -7,7 +7,7 @@ from boto3.exceptions import Boto3Error
 from botocore.exceptions import ClientError
 
 from .. import log_debug, log_info, log_warn, request_with_retries, os_to_settings
-from .. import sts_decode_auth_msg, ec2_tag_value, aws_get_region, ec2_wait_for_state, ec2_node_ensure
+from .. import sts_decode_auth_msg, ec2_tag_value, aws_get_region, ec2_wait_for_state, ec2_node_ensure, ec2_node_public_ip
 from .. import ec2_compute_tags, ec2_ensure_ssh_keypair
 
 from ..SSH import SSH, SSHError, SCP
@@ -336,6 +336,13 @@ class RancherServer(object):
                         ec2_node_ensure(self.name())
                         self.__docker_install()
                         self.__install_server_container()
+
+                        with open('cattle_test_url', 'w') as f:
+                                f.write("http://{}:8080".format(self.IP()))
+
+                        public_ip = ec2_node_public_ip(self.name())
+                        log_info("Rancher Server will be available at 'http://{}:8080' shortly...".format(public_ip))
+
                 except RuntimeError as e:
                         msg = "Failed while provisining Rancher Server!: {}".format(str(e))
                         log_debug(msg)
@@ -366,7 +373,7 @@ class RancherServer(object):
                         log_debug("reg command: {}".format(reg_command))
 
                 except (IndexError, KeyError, RancherServerError) as e:
-                        msg = "Failed while retrieving registration URL!: {}".format(str(e))
+                        msg = "Failed while retrieving registration command!: {}".format(str(e))
                         log_debug(msg)
                         raise RancherServerError(msg) from e
 

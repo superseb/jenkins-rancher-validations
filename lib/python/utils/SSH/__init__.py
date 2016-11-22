@@ -38,7 +38,7 @@ class SSH(object):
                 log_info(msg)
                 time.sleep(30)
 
-        if attempts >= max_attempts and not result.ok:
+        if attempts >= max_attempts and not result:
             msg = "SSH command exceeded max attempts!"
             log_debug(msg)
             raise SSHError(msg)
@@ -76,7 +76,7 @@ class SCP(object):
                 log_debug(msg)
                 time.sleep(30)
 
-        if attempts >= max_attempts and not result.ok:
+        if attempts >= max_attempts and not result:
             msg = "SCP command exceeded max attempts!"
             log_info(msg)
             raise SSHError(msg)
