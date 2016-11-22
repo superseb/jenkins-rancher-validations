@@ -6,11 +6,23 @@ from os import walk
 from requests import ConnectionError, HTTPError
 from time import sleep
 from boto3.exceptions import Boto3Error
+from botocore.exceptions import ClientError
 
 
 # This might be bad...assuming that wherever this is running its always going to be
 # TERM=ansi and up to 256 colors.
 colors.use_color = 3
+
+
+#
+def ec2_compute_tags(nodename):
+    # in addition to AWS_TAGS, include a tag for Docker version which will be
+    # referenced by later provisining scripts.
+    docker_version = str(os.environ['RANCHER_DOCKER_VERSION']).rstrip()
+    tags = str(os.environ['AWS_TAGS']).rstrip()
+    tags += ',rancher.docker.version,{}'.format(docker_version)
+    tags += ',Name,{}'.format(nodename)
+    return tag_csv_to_array(tags)
 
 
 #
@@ -217,9 +229,9 @@ def os_to_settings(os):
         ssh_username = 'centos'
 
     elif 'rhel-7' in os:
-#        ami = 'ami-ca56b5aa'
         ami = 'ami-6f68cf0f'
-#        ami = 'ami-99bef1a9'
+        #        ami = 'ami-ca56b5aa'
+        #        ami = 'ami-99bef1a9'
         ssh_username = 'ec2-user'
 
     elif 'rancheros-v06' in os:
@@ -231,7 +243,7 @@ def os_to_settings(os):
         ssh_username = 'core'
 
     else:
-        raise RuntimeError("Unsupported OS specified \'{}\'!".format(os))
+        raise RuntimeError("Unsupported OS specified '{}'!".format(os))
 
     return {'ami-id': ami, 'ssh_username': ssh_username}
 
@@ -572,5 +584,160 @@ def syntax_check(rootdir, filetypes=[], excludes=[]):
 
     except (yaml.YAMLError, Failure) as e:
         err_and_exit(str(e))
+
+    return True
+
+
+#
+def ec2_ensure_ssh_keypair(nodename):
+    log_debug('Ensuring an ssh keypair exists...')
+
+    try:
+        # create a key pair in the filesystem if one does not already exist
+        if not os.path.isfile('.ssh/{}'.format(nodename)):
+            run('mkdir -p .ssh && rm -rf .ssh/{}'.format(nodename), echo=True)
+            run("ssh-keygen -N '' -C '{}' -f .ssh/{}".format(nodename, nodename), echo=True)
+            run("chmod 0600 .ssh/{}".format(nodename), echo=True)
+
+            # update the key pair in AWS - Yes, Terraform has a Provider for this and Pupupet does not...
+            log_info("Uploading ssh pub key '{}' to AWS...".format(nodename))
+            ec2 = boto3.client('ec2', region_name=str(os.environ['AWS_DEFAULT_REGION']).rstrip())
+            ec2.delete_key_pair(KeyName=nodename)
+
+            pubkey = open('.ssh/{}.pub'.format(nodename), 'r').read()
+            log_debug("pub key: '{}'".format(pubkey))
+
+            #                        WTF??!? Docs say this has to b64 encoded!?!?
+            #                        b64pubkey = base64.b64encode(bytes(pubkey, 'utf-8').ascii())
+            #                        log_debug("base64 pub key: '{}'".format(b64pubkey))
+
+            ec2.import_key_pair(
+                KeyName=nodename,
+                PublicKeyMaterial=pubkey)
+
+    except (Failure, Boto3Error) as e:
+        msg = "Failed while ensuring ssh keypair!: {}".format(str(e))
+        log_debug(msg)
+        raise RuntimeError(msg) from e
+
+    return nodename
+
+
+#
+def ec2_ensure_node(nodename):
+    log_info("Ensuring node '{}'...".format(nodename))
+
+    server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+    os_settings = os_to_settings('server_os')
+    sgids = [str(os.environ['AWS_SECURITY_GROUP_ID']).rstrip()]
+    instance_type = str(os.environ['RANCHER_SERVER_AWS_INSTANCE_TYPE']).rstrip()
+    zone = str(os.environ['AWS_ZONE']).rstrip()
+    region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
+    placement = {'AvailabilityZone': '{}{}'.format(region, zone)}
+    subnetid = str(os.environ['AWS_SUBNET_ID']).rstrip()
+    region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
+
+    custom_vols = None
+
+    network_ifs = [{
+        'DeviceIndex': 0,
+        'SubnetId': subnetid,
+        'AssociatePublicIpAddress': True,
+        'Groups': sgids,
+    }]
+
+    # only intersted in nodes which might have same name and which are running or pending
+    node_filter = [
+        {'Name': 'tag:Name', 'Values': [nodename]},
+        {'Name': 'instance-state-name', 'Values': ['running', 'pending']}
+    ]
+
+    try:
+        ec2 = boto3.client('ec2', region_name=region)
+        instances = ec2.describe_instances(Filters=node_filter)
+        log_debug("instance: {}".format(instances))
+
+        # first check if server(s) by our specified name already exists
+        if 0 != len(instances['Reservations']):
+            msg = "Detected already running instance by name of '{}'...".format(nodename)
+            log_debug(msg)
+            raise RuntimeError(msg)
+
+        # nope, let's go ahead and create one
+        else:
+            keyname = ec2_ensure_ssh_keypair(nodename)
+
+            # yuck
+            iam_profile = boto3.resource('iam').InstanceProfile(str(os.environ['AWS_INSTANCE_PROFILE']))
+            iam_profile = {'Name': iam_profile.name}
+
+            # CoreOS is odd-ball in that it uses a different root volume
+            if 'core' in server_os:
+                custom_vols = [{'DeviceName': '/dev/xvda', 'Ebs': {'VolumeSize': 30}}]
+                log_info("Setting custom root device '{}' for CoreOS...".format(custom_vols))
+
+            # RHEL osfamily needs a second LVM volume for thinpool config
+            if 'rhel' in server_os or 'centos' in server_os:
+                custom_vols = [{
+                    'DeviceName': '/dev/sdb',
+                    'Ebs': {'VolumeSize': 30, 'DeleteOnTermination': True}}]
+                log_info("Creating second volume to host thinpool config for RHEL osfamily: {}".format(custom_vols))
+
+            log_info("Creating Rancher Server '{}'...".format(nodename))
+
+            # have to include block device mapping configs for these OSes and setting
+            # the parameter to None makes the boto3 API unhappy. :\
+            if 'rhel' in server_os or 'centos' in server_os or 'core' in server_os:
+                instance = ec2.run_instances(
+                    ImageId=os_settings['ami-id'],
+                    MinCount=1,
+                    MaxCount=1,
+                    KeyName=keyname,
+                    InstanceType=instance_type,
+                    Placement=placement,
+                    NetworkInterfaces=network_ifs,
+                    IamInstanceProfile=iam_profile,
+                    BlockDeviceMappings=custom_vols)
+            else:
+                instance = ec2.run_instances(
+                    ImageId=os_settings['ami-id'],
+                    MinCount=1,
+                    MaxCount=1,
+                    KeyName=keyname,
+                    InstanceType=instance_type,
+                    Placement=placement,
+                    NetworkInterfaces=network_ifs,
+                    IamInstanceProfile=iam_profile)
+
+            log_debug("run request response for '{}'...".format(instance))
+            log_debug("instance info: {}".format(instance['Instances']))
+
+            instance_id = instance['Instances'][0]['InstanceId']
+            log_info("instance-id of Rancher Server node: {}".format(instance_id))
+
+            tags = ec2_compute_tags()
+            log_info("Tagging instance '{}' with tags: {}".format(instance_id, tags))
+
+            # give our instance time to enter 'pending' before we try to tag it
+            time.sleep(10)
+            ec2.create_tags(
+                Resources=[instance_id],
+                Tags=tags)
+
+            # waiting for 'running' is the easiest way to eliminate race conditions later
+            log_info("Waiting for node to enter state 'running'...")
+            ec2_wait_for_state(instance_id, 'running')
+
+    except (ClientError, Boto3Error) as e:
+        addtl_msg = str(e)
+        if 'ClientError' == e.__class__.__name__:
+            errmsg = e.response['Error']['Message']
+            if 'Encoded authorization failure' in errmsg:
+                codedmsg = errmsg.split(':')[1].replace(' ', '')
+                addtl_msg = sts_decode_auth_msg(codedmsg)
+
+                msg = "Failed while provisioning Rancher Server!: {}".format(addtl_msg)
+                log_debug(msg)
+                raise RuntimeError(msg) from e
 
     return True

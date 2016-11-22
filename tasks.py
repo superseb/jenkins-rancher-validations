@@ -190,7 +190,7 @@ ns.add_collection(aws)
 rs = Collection('rancher_server')
 rs.add_task(rancher_server_provision, 'provision')
 rs.add_task(rancher_server_deprovision, 'deprovision')
-#rs.add_task(rancher_server_validate, 'validate')
+# rs.add_task(rancher_server_validate, 'validate')
 rs.add_task(rancher_server_configure, 'configure')
 ns.add_collection(rs)
 

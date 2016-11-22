@@ -308,12 +308,16 @@ class RancherAgents(object):
         def __ensure_rancher_agents(self):
                 agents = 0
                 successes = 0
+                agent_name_prefix = self.__get_agent_name_prefix()
 
                 while agents <= 9:
                         result = False
                         agents += 1
-                        # provision
-                        if True = result:
+                        agent_name = agent_name_prefix + '-agent{}'.format(agents)
+
+                        result = ec2_ensure_node(agent_name)
+
+                        if True is result:
                                 successes += 1
 
                         if successes >= 3:

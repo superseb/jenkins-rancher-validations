@@ -193,10 +193,14 @@ system_prep() {
 	    sudo yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
 	    sudo yum install -y deltarpm
 	    sudo yum upgrade -y
-	    sudo yum-config-manager --enable rhui-REGION-rhel-server-extras
-	    sudo yum install --skip-broken -y ruby-devel wget jq python-pip htop puppet python-docutils mosh
-	    sudo yum groupinstall -y "Development Tools"
-	    sudo yum install -y gcc-c++ patch readline readline-devel zlib zlib-devel libyaml-devel libffi-devel openssl-devel make bzip2 autoconf automake libtool bison iconv-devel
+	    
+	    # if this worked we could have inspec. :\
+	    #	    sudo yum-config-manager --enable rhui-REGION-rhel-server-extras
+	    #	    sudo yum install -y ruby-devel
+	    #	    sudo yum groupinstall -y "Development Tools"
+	    #	    sudo yum install -y gcc-c++ patch readline readline-devel zlib zlib-devel libyaml-devel libffi-devel openssl-devel make bzip2 autoconf automake libtool bison iconv-devel
+	    
+	    sudo yum install --skip-broken -y wget jq python-pip htop puppet python-docutils mosh
 	    sudo puppet resource service puppet ensure=stopped enable=false
 	    sudo pip install awscli
 	    sudo wget -O /usr/local/bin/ec2metadata http://s3.amazonaws.com/ec2metadata/ec2-metadata

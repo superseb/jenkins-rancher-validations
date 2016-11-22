@@ -6,9 +6,9 @@ from time import sleep
 from boto3.exceptions import Boto3Error
 from botocore.exceptions import ClientError
 
-from .. import log_debug, log_info, log_warn, request_with_retries, tag_csv_to_array, os_to_settings
-from .. import sts_decode_auth_msg, ec2_tag_value, aws_get_region, ebs_provision_volume, ebs_deprovision_volume
-from .. import ec2_wait_for_state, ec2_instance_id_from_name
+from .. import log_debug, log_info, log_warn, request_with_retries, os_to_settings
+from .. import sts_decode_auth_msg, ec2_tag_value, aws_get_region
+from .. import ec2_wait_for_state, ec2_ensure_node, ec2_compute_tags, ec2_ensure_ssh_keypair
 
 from ..SSH import SSH, SSHError, SCP
 
@@ -201,16 +201,6 @@ class RancherServer(object):
                 return self.name()
 
         #
-        def __compute_tags(self):
-                # in addition to AWS_TAGS, include a tag for Docker version which will be
-                # referenced by later provisining scripts.
-                docker_version = str(os.environ['RANCHER_DOCKER_VERSION']).rstrip()
-                tags = str(os.environ['AWS_TAGS']).rstrip()
-                tags += ',rancher.docker.version,{}'.format(docker_version)
-                tags += ',Name,{}'.format(self.name())
-                return tag_csv_to_array(tags)
-
-        #
         def __ensure_rancher_server(self):
                 log_info("Ensuring Rancher Server node '{}'...".format(self.name()))
 
@@ -300,7 +290,7 @@ class RancherServer(object):
                                 instance_id = instance['Instances'][0]['InstanceId']
                                 log_info("instance-id of Rancher Server node: {}".format(instance_id))
 
-                                tags = self.__compute_tags()
+                                tags = ec2_compute_tags(self.name())
                                 log_info("Tagging instance '{}' with tags: {}".format(instance_id, tags))
 
                                 # give our instance time to enter 'pending' before we try to tag it
@@ -375,9 +365,9 @@ class RancherServer(object):
 
         #
         def provision(self):
-                self.__ensure_rancher_server()
-                self.__install_docker()
-                self.__install_rancher_server_container()
+                ec2_ensure_node(self.name())
+                ec2_ensure_ssh_keypair(self.name())
+                self.__rancher_install_server(self.name())
 
         #
         def __set_reg_token(self):

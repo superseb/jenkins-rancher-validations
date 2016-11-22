@@ -1,4 +1,4 @@
-import os, time
+import time
 from invoke import run, Failure
 
 from .. import log_debug, log_info
