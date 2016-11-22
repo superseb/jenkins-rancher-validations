@@ -127,6 +127,19 @@ def rancher_server_provision(ctx):
     return result
 
 
+# @task
+# def rancher_server_validate(ctx):
+#     """
+#     Validate Rancher Server node.
+#     """
+#     try:
+#         result = RancherServer().validate()
+#     except RancherServerError as e:
+#         err_and_exit("Failed to validate Rancher Server node! : {}".format(e.message))
+#     log_success()
+#     return result
+
+
 @task
 def rancher_server_configure(ctx):
     """
@@ -177,6 +190,7 @@ ns.add_collection(aws)
 rs = Collection('rancher_server')
 rs.add_task(rancher_server_provision, 'provision')
 rs.add_task(rancher_server_deprovision, 'deprovision')
+#rs.add_task(rancher_server_validate, 'validate')
 rs.add_task(rancher_server_configure, 'configure')
 ns.add_collection(rs)
 

@@ -127,93 +127,93 @@ class RancherAgents(object):
                 return tags
 
         #
-        def __provision_via_rancher_api(self):
-                provision_url = "http://{}:8080/v2-beta/projects/1a5/host".format(RancherServer().IP())
-                agent_os = os.environ['RANCHER_AGENT_OPERATINGSYSTEM']
-                os_settings = os_to_settings(agent_os)
+        # def __provision_via_rancher_api(self):
+        #         provision_url = "http://{}:8080/v2-beta/projects/1a5/host".format(RancherServer().IP())
+        #         agent_os = os.environ['RANCHER_AGENT_OPERATINGSYSTEM']
+        #         os_settings = os_to_settings(agent_os)
 
-                # CoreOS is a bit of an oddball about root storage device name
-                if 'coreos' in agent_os:
-                        root_device = '/dev/xvda'
-                else:
-                        root_device = '/dev/sda1'
+        #         # CoreOS is a bit of an oddball about root storage device name
+        #         if 'coreos' in agent_os:
+        #                 root_device = '/dev/xvda'
+        #         else:
+        #                 root_device = '/dev/sda1'
 
-                # Try to provison 10 but stop if we get 3 successes. This is necessary because
-                # Docker Machine/go-machine fails pretty often.
-                provisioning_attempts = 0
-                for agent_name in self.__get_agent_names(10):
+        #         # Try to provison 10 but stop if we get 3 successes. This is necessary because
+        #         # Docker Machine/go-machine fails pretty often.
+        #         provisioning_attempts = 0
+        #         for agent_name in self.__get_agent_names(10):
 
-                        amazonec2_config = {
-                                'type': 'amazonec2Config',
-                                'accessKey': os.environ['AWS_ACCESS_KEY_ID'],
-                                'secretKey': os.environ['AWS_SECRET_ACCESS_KEY'],
-                                'ami': os_settings['ami-id'],
-                                'deviceName': root_device,
-                                'instanceType': os.environ['RANCHER_AGENT_AWS_INSTANCE_TYPE'],
-                                'region': os.environ['AWS_DEFAULT_REGION'],
-                                'securityGroup': os.environ['AWS_SECURITY_GROUP'],
-                                'sshUser': os_settings['ssh_username'],
-                                'subnetId': os.environ['AWS_SUBNET_ID'],
-                                'tags': self.__compute_tags(),
-                                'vpcId': os.environ['AWS_VPC_ID'],
-                                'zone': os.environ['AWS_ZONE'],
-                                'iamInstanceProfile': os.environ['AWS_INSTANCE_PROFILE'],
-                        }
+        #                 amazonec2_config = {
+        #                         'type': 'amazonec2Config',
+        #                         'accessKey': os.environ['AWS_ACCESS_KEY_ID'],
+        #                         'secretKey': os.environ['AWS_SECRET_ACCESS_KEY'],
+        #                         'ami': os_settings['ami-id'],
+        #                         'deviceName': root_device,
+        #                         'instanceType': os.environ['RANCHER_AGENT_AWS_INSTANCE_TYPE'],
+        #                         'region': os.environ['AWS_DEFAULT_REGION'],
+        #                         'securityGroup': os.environ['AWS_SECURITY_GROUP'],
+        #                         'sshUser': os_settings['ssh_username'],
+        #                         'subnetId': os.environ['AWS_SUBNET_ID'],
+        #                         'tags': self.__compute_tags(),
+        #                         'vpcId': os.environ['AWS_VPC_ID'],
+        #                         'zone': os.environ['AWS_ZONE'],
+        #                         'iamInstanceProfile': os.environ['AWS_INSTANCE_PROFILE'],
+        #                 }
 
-                        payload = {
-                                'type': 'machine',
-                                'engineInstallUrl': 'https://raw.githubusercontent.com/nrvale0/jenkins-rancher-validations/stable/lib/bash/docker_version_from_aws_tag.sh',
-                                'amazonec2Config': amazonec2_config,
-                                'hostname': agent_name,
-                        }
+        #                 payload = {
+        #                         'type': 'machine',
+        #                         'engineInstallUrl': 'https://raw.githubusercontent.com/nrvale0/jenkins-rancher-validations/stable/lib/bash/docker_version_from_aws_tag.sh',
+        #                         'amazonec2Config': amazonec2_config,
+        #                         'hostname': agent_name,
+        #                 }
 
-                        try:
-                                if 'rhel' in agent_os or 'centos' in agent_os:
-                                        tags = self.__compute_tags()
-                                        addtl_vol_id = ebs_provision_volume(
-                                                name="{}-docker".format(agent_name),
-                                                region=os.environ['AWS_DEFAULT_REGION'],
-                                                zone=os.environ['AWS_ZONE'],
-                                                tags=os.environ['AWS_TAGS'])
-                                        tags += ",rancherlabs.ci.addtl_volid,{}".format(addtl_vol_id)
-                                        payload['amazonec2Config']['tags'] = tags
+        #                 try:
+        #                         if 'rhel' in agent_os or 'centos' in agent_os:
+        #                                 tags = self.__compute_tags()
+        #                                 addtl_vol_id = ebs_provision_volume(
+        #                                         name="{}-docker".format(agent_name),
+        #                                         region=os.environ['AWS_DEFAULT_REGION'],
+        #                                         zone=os.environ['AWS_ZONE'],
+        #                                         tags=os.environ['AWS_TAGS'])
+        #                                 tags += ",rancherlabs.ci.addtl_volid,{}".format(addtl_vol_id)
+        #                                 payload['amazonec2Config']['tags'] = tags
 
-                                log_debug("Creating agent '{}' via Rancher REST API at {}...".format(agent_name, provision_url))
-                                log_debug("payload: {}".format(payload))
-                                provisioning_attempts += 1
-                                result = request_with_retries('POST', provision_url, payload, attempts=3)
+        #                         log_debug("Creating agent '{}' via Rancher REST API at {}...".format(agent_name, provision_url))
+        #                         log_debug("payload: {}".format(payload))
+        #                         provisioning_attempts += 1
+        #                         result = request_with_retries('POST', provision_url, payload, attempts=3)
 
-                                # only wait if we have attempted at least three agents
-                                if provisioning_attempts >= 3:
-                                        log_info("Waiting a few minutes to see if we get 3 active agents...")
-                                        self.__wait_on_active_agents(3)
-                                        break
+        #                         # only wait if we have attempted at least three agents
+        #                         if provisioning_attempts >= 3:
+        #                                 log_info("Waiting a few minutes to see if we get 3 active agents...")
+        #                                 self.__wait_on_active_agents(3)
+        #                                 break
 
-                        # thrown for failure when talking to API
-                        except Failure as e:
-                                msg = "Failed to provision agent node '{}'!: {}".format(agent_name, str(e.result))
-                                log_info(msg)
+        #                 # thrown for failure when talking to API
+        #                 except Failure as e:
+        #                         msg = "Failed to provision agent node '{}'!: {}".format(agent_name, str(e.result))
+        #                         log_info(msg)
 
-                                if provisioning_attempts >= 10:
-                                        msg = "Exceeded 10 attempts at node provisioning with < 3 successes!"
-                                        log_debug(msg)
-                                        raise RancherAgentsError(msg) from e
+        #                         if provisioning_attempts >= 10:
+        #                                 msg = "Exceeded 10 attempts at node provisioning with < 3 successes!"
+        #                                 log_debug(msg)
+        #                                 raise RancherAgentsError(msg) from e
 
-                        # thrown if we waited too long for 3 active agents
-                        except RancherAgentsError as e:
-                                msg = "Time exceeded waiting for 3 active agents."
-                                log_info(msg)
+        #                 # thrown if we waited too long for 3 active agents
+        #                 except RancherAgentsError as e:
+        #                         msg = "Time exceeded waiting for 3 active agents."
+        #                         log_info(msg)
 
-                                if provisioning_attempts >= 10:
-                                        raise RancherAgentsError(msg) from e
-                                else:
-                                        log_info("Will provision additional agent nodes...")
+        #                         if provisioning_attempts >= 10:
+        #                                 raise RancherAgentsError(msg) from e
+        #                         else:
+        #                                 log_info("Will provision additional agent nodes...")
 
-                if 'rhel' in agent_os or 'centos' in agent_os:
-                        log_info("Sleeping for 5 minutes while Waiting for osfamily 'redhat' nodes to transition to Docker LVM thinpool config...")
-                        sleep(300)
+        #         if 'rhel' in agent_os or 'centos' in agent_os:
+        #                 log_info("Sleeping for 5 minutes while Waiting for osfamily 'redhat' nodes to transition to Docker LVM thinpool config...")
+        #                 sleep(300)
 
-                return True
+        #         return True
 
         #
         # def provision_via_rancher_cli(self):
@@ -305,9 +305,42 @@ class RancherAgents(object):
         #         return True
 
         #
+        def __ensure_rancher_agents(self):
+                agents = 0
+                successes = 0
+
+                while agents <= 9:
+                        result = False
+                        agents += 1
+                        # provision
+                        if True = result:
+                                successes += 1
+
+                        if successes >= 3:
+                                log_info("Successful provisioning of 3 agents.")
+                                break
+
+                if successes >= 3:
+                        return True
+                else:
+                        msg = "Failed to provision 3 agents after 10 attempts! Giving up..."
+                        log_debug(msg)
+                        raise RacherAgentsError(msg)
+
+        #
+        def __ensure_agents_docker(self):
+                pass
+
+        #
+        def __ensure_rancher_agents_container(self):
+                pass
+
+        #
         def provision(self):
                 try:
-                        self.__provision_via_rancher_api()
+                        self.__ensure_rancher_agents()
+                        self.__ensure_agents_docker()
+                        self.__ensure_rancher_agents_container()
                 except RancherAgentsError as e:
                         msg = "Failed while provisioning Rancher Agents!: {}".format(str(e))
                         log_debug(msg)

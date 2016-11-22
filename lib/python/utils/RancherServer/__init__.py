@@ -94,6 +94,30 @@ class RancherServer(object):
                 return ipaddr
 
         #
+        # def validate(self):
+        #         log_info("Validating config of Rancher Server...")
+
+        #         server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+        #         os_settings = os_to_settings(server_os)
+        #         ssh_username = os_settings['ssh_username']
+
+        #         try:
+        #                 sshcmds = ['gem install inspec --no-ri --no-rdoc']
+        #                 for sshcmd in sshcmds:
+        #                         SSH(self.name(), self.IP(), ssh_username, sshcmd, max_attempts=2)
+
+        #                 cmd = 'inspec exec ./lib/inspec/rancher/server.rb ssh://{}@{} -i .ssh/{}'.format(
+        #                         ssh_username,
+        #                         self.IP(),
+        #                         self.name())
+        #                 run(cmd, echo=True)
+
+        #         except (SSHError, Failure) as e:
+        #                 msg ="Failed during Rancher Server validation!: {}".format(str(e))
+        #                 log_debug(msg)
+        #                 raise RancherServerError(msg)
+
+        #
         def deprovision(self):
                 log_info("Deprovisioning Rancher Server '{}'...".format(self.name()))
                 region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
@@ -341,7 +365,7 @@ class RancherServer(object):
                 log_info('Deploying rancher/server:{}...'.format(rancher_version))
 
                 try:
-                         sshcmd = 'docker run -d -p 8080:8080 --restart=always rancher/server:{}'.format(rancher_version)
+                         sshcmd = 'sudo docker run -d -p 8080:8080 --restart=always rancher/server:{}'.format(rancher_version)
                          SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd)
 
                 except SSHError as e:

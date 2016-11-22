@@ -1,7 +1,7 @@
 import os, time
 from invoke import run, Failure
 
-from .. import log_debug
+from .. import log_debug, log_info
 
 
 #
@@ -38,7 +38,7 @@ class SSH(object):
                 log_info(msg)
                 time.sleep(30)
 
-        if attempts >= max_attempts:
+        if attempts >= max_attempts and not result.ok:
             msg = "SSH command exceeded max attempts!"
             log_debug(msg)
             raise SSHError(msg)
@@ -76,7 +76,7 @@ class SCP(object):
                 log_debug(msg)
                 time.sleep(30)
 
-        if attempts >= max_attempts:
+        if attempts >= max_attempts and not result.ok:
             msg = "SCP command exceeded max attempts!"
             log_info(msg)
             raise SSHError(msg)
