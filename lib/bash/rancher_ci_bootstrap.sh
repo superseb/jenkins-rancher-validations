@@ -211,6 +211,7 @@ system_prep() {
 	    sudo apt-get update
 	    sudo apt-get -y upgrade
 	    sudo apt-get install -y jq awscli htop mosh cloud-guest-utils puppet
+	    sudo puppet resource service puppet ensure=stopped enable=false
 	    ;;
 	
 	default)
@@ -271,8 +272,7 @@ main() {
 	echo 'Performing special RHEL osfamily storage config...'
 	redhat_config
 	docker_lvm_thinpool_config
-	docker_install_tag_version
-
+	
     elif [ 'debian' == "${osfamily}" ]; then
 	docker_install_tag_version
 	
