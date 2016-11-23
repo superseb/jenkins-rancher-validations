@@ -250,6 +250,8 @@ def os_to_settings(os):
 
 #
 def ec2_wait_for_state(instance, desired_state, timeout=300):
+    log_info("Waiting for node '{}' to enter state '{}'...".format(instance, desired_state))
+
     steptime = 5
     actual_state = None
     nodefilter = [{'Name': 'instance-id', 'Values': [instance]}]
@@ -259,10 +261,14 @@ def ec2_wait_for_state(instance, desired_state, timeout=300):
     while time.time() - starttime < timeout:
         try:
             rez = ec2.describe_instances(Filters=nodefilter)['Reservations']
+            log_debug("rez: {}".format(rez))
+
             if 0 < len(rez):
                 actual_state = rez[0]['Instances'][0]['State']['Name']
                 log_debug("desired state: {} ; actual state: {}".format(desired_state, actual_state))
+
                 if actual_state == desired_state:
+                    log_info("Node '{}' has entered state '{}'.".format(instance, desired_state))
                     break
                 else:
                     sleep(steptime)
@@ -289,6 +295,7 @@ def ec2_tag_value(nodename, tagname):
         ec2 = boto3.client('ec2')
         node_metadata = ec2.describe_instances(Filters=ec2_filter)
         log_debug("node metadata: {}".format(node_metadata))
+
         tags = node_metadata['Reservations'][0]['Instances'][0]['Tags']
         log_debug("tags: {}".format(tags))
 
@@ -298,7 +305,7 @@ def ec2_tag_value(nodename, tagname):
                 break
 
     except (IndexError, KeyError, Boto3Error) as e:
-        msg = "Failed while looking up tag '{}'!: {}".format(tagname, str(e.args))
+        msg = "Failed while looking up tag '{}'!: {}".format(tagname, str(e))
         log_debug(msg)
         raise RuntimeError(msg) from e
 
@@ -730,8 +737,6 @@ def ec2_node_ensure(nodename):
         log_info("Waiting for node to enter state 'running'...")
         ec2_wait_for_state(instance_id, 'running')
 
-        sleep(5)
-
         public_ip = ec2_node_public_ip(nodename, region)
         log_info("Node '{}' is available at address '{}'.".format(nodename, public_ip))
 
@@ -743,9 +748,9 @@ def ec2_node_ensure(nodename):
                 codedmsg = errmsg.split(':')[1].replace(' ', '')
                 addtl_msg = sts_decode_auth_msg(codedmsg)
 
-                msg = "Failed while provisioning Rancher Server!: {}".format(addtl_msg)
-                log_debug(msg)
-                raise RuntimeError(msg) from e
+        msg = "Failed while provisioning Rancher Server!: {}".format(addtl_msg)
+        log_debug(msg)
+        raise RuntimeError(msg) from e
 
     return True
 
