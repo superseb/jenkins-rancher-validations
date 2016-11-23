@@ -166,6 +166,11 @@ if ( true == via_webhook() && 'master' == rancher_version()) {
 	  }
 
 	  if ( "false" == "${PIPELINE_PROVISION_STOP}" ) {
+
+	    stage ('wait for intfra catalogs to settle...') {
+	      sh "echo 'Sleeping for 10 minutes while we wait on infrastructure catalogs to deploy to Agents....'"
+	      sh "sleep 600"
+            }
 	    
 	    stage ('run validation tests') {
 	      CATTLE_TEST_URL = readFile('cattle_test_url').trim()
