@@ -2,7 +2,7 @@ import os
 
 from invoke import run, Failure
 from time import sleep, time
-from .. import log_info, log_debug, os_to_settings, nuke_aws_keypair
+from .. import log_info, log_debug, log_warn, os_to_settings, nuke_aws_keypair
 from .. import ec2_node_ensure, ec2_node_terminate, ec2_node_public_ip
 
 from ..RancherServer import RancherServer, RancherServerError
@@ -120,8 +120,8 @@ class RancherAgents(object):
                                         agents += 1
 
                         except RuntimeError as e:
-                                msg = "Failed while provisioning agent '{}'...".format(agent_name)
-                                log_debug(msg)
+                                msg = "Failed while provisioning agent '{}'!: {}".format(agent_name, str(e))
+                                log_warn(msg)
 
                         if agents >= 3 or attempts >= max_attempts:
                                 break
