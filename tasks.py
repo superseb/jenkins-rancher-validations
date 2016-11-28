@@ -99,7 +99,7 @@ def rancher_agents_deprovision(ctx):
         RancherAgents().deprovision()
     except RancherAgentsError as e:
         err_and_exit("Failed to deprovision Rancher Agents! : {}".format(e.message))
-    log_success()
+    log_success("Rancher Agents deprovisioning : [OK]")
 
 
 @task
@@ -111,7 +111,7 @@ def rancher_server_deprovision(ctx):
         RancherServer().deprovision()
     except RancherServerError as e:
         err_and_exit("Failed to deprovision Rancher Server node! : {}".format(e.message))
-    log_success()
+    log_success("Rancher Server deprovisioning : [OK]")
 
 
 @task
@@ -123,7 +123,7 @@ def rancher_server_provision(ctx):
         result = RancherServer().provision()
     except RancherServerError as e:
         err_and_exit("Failed to provision Rancher Server node! : {}".format(e.message))
-    log_success()
+    log_success("Rancher Server provisioning : [OK]")
     return result
 
 
@@ -149,7 +149,7 @@ def rancher_server_configure(ctx):
         RancherServer().configure()
     except RancherServerError as e:
         err_and_exit("Failed to configure Rancher Server node! : {}".format(e.message))
-    log_success()
+    log_success("Rancher Server configuration: [OK]")
 
 
 @task
@@ -161,7 +161,7 @@ def rancher_agents_provision(ctx):
         RancherAgents().provision()
     except RancherAgentsError as e:
         err_and_exit("Failed to provision Rancher Agent nodes! : {}".format(e.message))
-    log_success()
+    log_success("Rancher Agents provisioning : [OK]")
 
 
 @task
@@ -173,7 +173,7 @@ def aws_provision(ctx):
         AWS().provision()
     except AWSError as e:
         err_and_exit("Failed to provision AWS! : {}".format(e.message))
-    log_success()
+    log_success("AWS VPC + Subnet provisioning : [OK]")
 
 
 ns = Collection('')
