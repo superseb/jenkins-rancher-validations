@@ -62,7 +62,7 @@ def jenkinsSlack(type) {
   channel = slack_channel()
   aws_prefix = aws_prefix()
   def rancher_version = rancher_version()
-  def jobInfo = "\n » ${aws_prefix} ${rancher_version} :: ${env.JOB_NAME} #${env.BUILD_NUMBER} (<${env.BUILD_URL}|job>) (<${env.BUILD_URL}/console|console>)"
+  def jobInfo = "\n » ${aws_prefix} ${rancher_version} :: ${JOB_NAME} #${env.BUILD_NUMBER} (<${env.BUILD_URL}|job>) (<${env.BUILD_URL}/console|console>)"
   
   if (type == 'start'){
     slackSend channel: channel, color: 'blue', message: "build started${jobInfo}"
