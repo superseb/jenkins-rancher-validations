@@ -92,6 +92,31 @@ def via_webhook() {
   }
 }
 
+
+// validation-tests code needs K8S_DEPLOY set if RANCHER_ORCHESTRATION=k8s
+def k8s_deploy() {
+  try {
+    if ('k8s' == RANCHER_ORCHESTRATION) { return 'True' }
+    else { return '' }
+  }
+  catch (MissingPropertyException e) {}
+}
+
+
+// compute the appropriate validation tests command if the user has not specifically supplied one
+def validation_tests_cmd() {
+  
+  if ( "true" == "${PIPELINE_SMOKE_TEST_ONLY}" ) {
+    return "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/core/test_container_run_option.py"
+    
+  } else if ( "k8s" == "${RANCHER_ORCHESTRATION}" ) {
+    return "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/core/test_k8*"
+    
+  } else {
+    return "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/"
+  }
+}
+
 // If version is 'master' and triggered via Docker Hub webhook then shut 'er down.
 // We only do master runs via scheduled runs.
 if ( true == via_webhook() && 'master' == rancher_version()) {
@@ -166,43 +191,41 @@ if ( true == via_webhook() && 'master' == rancher_version()) {
 	      "rancherlabs/ci-validation-tests rancher_server.configure"
 	  }
 
-	  stage ('provision Rancher Agents') {
-	    sh "docker run --rm  " +
-	      "-v \"\$(pwd)\":/workdir " +
-	      "--env-file .env " +
-	      "rancherlabs/ci-validation-tests rancher_agents.provision"
-	  }
-
-	  if ( "false" == "${PIPELINE_PROVISION_STOP}" ) {
-
-	    stage ('wait for intfra catalogs to settle...') {
-	      sh "echo 'Sleeping for 10 minutes while we wait on infrastructure catalogs to deploy to Agents....'"
-	      sh "sleep 600"
-            }
-	    
-	    stage ('run validation tests') {
-	      CATTLE_TEST_URL = readFile('cattle_test_url').trim()
-	      withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}"]) {
-		sh "git clone https://github.com/rancher/validation-tests"
-		try {
-		  
-		  if ( "true" == "${PIPELINE_SMOKE_TEST_ONLY}" ) {
-		    sh "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/core/test_container_run_option.py"
-		  } else {
-		    //		    if ( "false" != "${CUSTOM_VALIDATION_TEST_CMD}" ) {
-		    //		      sh "${CUSTOM_VALIDATION_TEST_CMD}"
-		    //		    } else {
-		      sh "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/"
-		    //		    }
-		  }
-		} catch(err) {
-		  echo 'Test run had failures. Collecting results...'
-		  echo 'Will not deprovision infrastructure to allow for post-mortem....'
-		}
-	      }
-	      step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
+	  // this should be a temporary hack until the pipeline re-claims k8s agent
+	  // provisioning from the validation-tests code. Talk to @sangeetha.
+	  if ( 'k8s' != "${RANCHER_ORCHESTRATION}" ) {
+	    stage ('provision Rancher Agents') {
+	      sh "docker run --rm  " +
+		"-v \"\$(pwd)\":/workdir " +
+		"--env-file .env " +
+		"rancherlabs/ci-validation-tests rancher_agents.provision"
 	    }
 
+	    if ( "false" == "${PIPELINE_PROVISION_STOP}" ) {
+	      stage ('wait for intfra catalogs to settle...') {
+		sh "echo 'Sleeping for 10 minutes while we wait on infrastructure catalogs to deploy to Agents....'"
+		sh "sleep 600"
+	      }
+	    }
+	  }
+
+	  stage ('run validation tests') {
+	    
+	    CATTLE_TEST_URL = readFile('cattle_test_url').trim()
+	    
+	    withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}", "K8S_DEPLOY=${k8s_deploy()}"]) {
+	      sh "git clone https://github.com/rancher/validation-tests"
+	      try {
+		def cmd = validation_tests_cmd()
+		sh "${cmd}"
+	      } catch(err) {
+		echo 'Test run had failures. Collecting results...'
+		echo 'Will not deprovision infrastructure to allow for post-mortem....'
+	      }
+	    }
+	    
+	    step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
+	    
 	    if ( 'UNSTABLE' != currentBuild.result ) {
 	  
 	      stage ('deprovision Rancher Agents') {
