@@ -71,7 +71,6 @@ def jenkinsSlack(type) {
     def buildColor = currentBuild.result == null? "good": "warning"
     def buildStatus = currentBuild.result == null? "SUCCESS": currentBuild.result
     def msg = "build finished - ${buildStatus}${jobInfo}"
-    if ('UNSTABLE' == currentBuild.result) { msg = msg + ' :: infrastructure is retained for post-mortem for FAILURE or UNSTABLE!' }
     slackSend channel: channel, color: buildColor, message: "${msg}"
   }
 }
@@ -119,8 +118,9 @@ def validation_tests_cmd() {
 
 
 // Filter out Docker Hub tags like 'latest', 'master', 'enterprise'.
-// Just wants things like v1.2*
-if ( true == via_webhook() && !(/^v\d+.*/ =~ rancher_version()) ) {
+// Just want things like v1.2*
+
+if ( true == via_webhook() && (!(rancher_version() ==~ /^v\d+.+$/)) ) {
   currentBuild.result = lastBuildResult()
 } else {
 
@@ -201,48 +201,43 @@ if ( true == via_webhook() && !(/^v\d+.*/ =~ rancher_version()) ) {
 		"--env-file .env " +
 		"rancherlabs/ci-validation-tests rancher_agents.provision"
 	    }
-
-	    if ( "false" == "${PIPELINE_PROVISION_STOP}" ) {
-	      stage ('wait for intfra catalogs to settle...') {
-		sh "echo 'Sleeping for 10 minutes while we wait on infrastructure catalogs to deploy to Agents....'"
-		sh "sleep 600"
-	      }
-	    }
 	  }
 
-	  stage ('run validation tests') {
+	  if ( "false" == "${PIPELINE_PROVISION_STOP}" ) {
+	    stage ('wait for infra catalogs to settle...') {
+	      sh "echo 'Sleeping for 10 minutes while we wait on infrastructure catalogs to deploy to Agents....'"
+	      sh "sleep 600"
+	    }
+
+	    stage ('run validation tests') {
 	    
-	    CATTLE_TEST_URL = readFile('cattle_test_url').trim()
+	      CATTLE_TEST_URL = readFile('cattle_test_url').trim()
 	    
-	    withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}", "K8S_DEPLOY=${k8s_deploy()}"]) {
-	      sh "git clone https://github.com/rancher/validation-tests"
-	      try {
+	      withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}", "K8S_DEPLOY=${k8s_deploy()}"]) {
+		sh "git clone https://github.com/rancher/validation-tests"
+		try {
 		def cmd = validation_tests_cmd()
 		sh "${cmd}"
-	      } catch(err) {
-		echo 'Test run had failures. Collecting results...'
-		echo 'Will not deprovision infrastructure to allow for post-mortem....'
+		} catch(err) {
+		  echo 'Test run had failures. Collecting results...'
+		}
 	      }
+	    
+	      step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
 	    }
 	    
-	    step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
+	    stage ('deprovision Rancher Agents') {
+	      sh "docker run --rm  " +
+		"-v \"\$(pwd)\":/workdir " +
+		"--env-file .env " +
+		"rancherlabs/ci-validation-tests rancher_agents.deprovision"
+	    }
 	    
-	    if ( 'UNSTABLE' != currentBuild.result ) {
-	  
-	      stage ('deprovision Rancher Agents') {
-		sh "docker run --rm  " +
-		  "-v \"\$(pwd)\":/workdir " +
-		  "--env-file .env " +
-		  "rancherlabs/ci-validation-tests rancher_agents.deprovision"
-	      }
-	  
-	      stage ('deprovision rancher/server') {
-		sh "docker run --rm  " +
-		  "-v \"\$(pwd)\":/workdir " +
-		  "--env-file .env " +
-		  "rancherlabs/ci-validation-tests rancher_server.deprovision"
-	      }
-	  
+	    stage ('deprovision rancher/server') {
+	      sh "docker run --rm  " +
+		"-v \"\$(pwd)\":/workdir " +
+		"--env-file .env " +
+		"rancherlabs/ci-validation-tests rancher_server.deprovision"
 	    }
 	  } // PIPELINE_PROVISION_STOP
 	} // PIPELINE_DEPROVISION_STOP
