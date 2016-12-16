@@ -71,7 +71,6 @@ def jenkinsSlack(type) {
     def buildColor = currentBuild.result == null? "good": "warning"
     def buildStatus = currentBuild.result == null? "SUCCESS": currentBuild.result
     def msg = "build finished - ${buildStatus}${jobInfo}"
-    if ('UNSTABLE' == currentBuild.result) { msg = msg + ' :: infrastructure is retained for post-mortem for FAILURE or UNSTABLE!' }
     slackSend channel: channel, color: buildColor, message: "${msg}"
   }
 }
@@ -204,7 +203,7 @@ if ( true == via_webhook() && !(/^v\d+.*/ =~ rancher_version()) ) {
 	  }
 
 	  if ( "false" == "${PIPELINE_PROVISION_STOP}" ) {
-	    stage ('wait for intfra catalogs to settle...') {
+	    stage ('wait for infra catalogs to settle...') {
 	      sh "echo 'Sleeping for 10 minutes while we wait on infrastructure catalogs to deploy to Agents....'"
 	      sh "sleep 600"
 	    }
@@ -220,7 +219,6 @@ if ( true == via_webhook() && !(/^v\d+.*/ =~ rancher_version()) ) {
 		sh "${cmd}"
 		} catch(err) {
 		  echo 'Test run had failures. Collecting results...'
-		  echo 'Will not deprovision infrastructure to allow for post-mortem....'
 		}
 	      }
 	    
