@@ -117,9 +117,10 @@ def validation_tests_cmd() {
   }
 }
 
-// If version is 'master' and triggered via Docker Hub webhook then shut 'er down.
-// We only do master runs via scheduled runs.
-if ( true == via_webhook() && ('master' == rancher_version() || 'latest' == rancher_version()) ) {
+
+// Filter out Docker Hub tags like 'latest', 'master', 'enterprise'.
+// Just wants things like v1.2*
+if ( true == via_webhook() && !(/^v\d+.*/ =~ rancher_version()) ) {
   currentBuild.result = lastBuildResult()
 } else {
 
