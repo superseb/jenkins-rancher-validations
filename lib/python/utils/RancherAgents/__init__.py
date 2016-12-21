@@ -116,7 +116,7 @@ class RancherAgents(object):
 
                         try:
                                 log_info("Provisioning agent '{}'...".format(agent_name))
-                                if True is ec2_node_ensure(agent_name):
+                                if True is ec2_node_ensure(agent_name, instance_type=os.environ.get('RANCHER_AGENT_AWS_INSTANCE_TYPE')):
                                         agents += 1
 
                         except RuntimeError as e:

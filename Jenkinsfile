@@ -222,7 +222,7 @@ if ( true == via_webhook() && (!(rancher_version() ==~ /^v\d+.+$/)) ) {
 
 	    stage ('run validation tests') {
 
-	      CATTLE_TEST_URL = readFile(cattle_test_url_filname()).trim()
+	      CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
 	      
 	      withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}", "K8S_DEPLOY=${k8s_deploy()}"]) {
 		sh "git clone https://github.com/rancher/validation-tests"
