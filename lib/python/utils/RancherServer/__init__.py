@@ -224,7 +224,14 @@ class RancherServer(object):
 
                         self.__install_server_container()
 
-                        with open('cattle_test_url', 'w') as f:
+                        cattle_test_url_filename = 'cattle_test_url'
+                        if os.environ.get('BUILD_NUMBER'):
+                                cattle_test_url_filename = "cattle_test_url.{}".format(os.environ.get('BUILD_NUMBER'))
+                                log_debug("Found BUILD_NUMBER so CATTLE_TEST_URL set in '{}'...".format(cattle_test_url_filename))
+                        else:
+                                log_debug("Did not find BUILD_NUMBER so CATTLE_TEST_URL is set in default of 'cattle_test_url'...")
+
+                        with open(cattle_test_url_filename, 'w') as f:
                                 f.write("http://{}:8080".format(self.IP()))
 
                         public_ip = ec2_node_public_ip(self.name())
