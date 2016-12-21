@@ -117,9 +117,20 @@ def validation_tests_cmd() {
 }
 
 
+// Get filename where CATTLE_TEST_URL is stored **for this build**.
+// Format: cattle_test_url.<BUILD_NUMBER>
+def cattle_test_url_filename() {
+  try {
+    return "cattle_test_url.${env.BUILD_NUMBER}"
+  } catch (MissingPropertyException e) {
+    echo "BUILD_NUMBER is required but was not set in env!"
+    error()
+  }
+}
+
+
 // Filter out Docker Hub tags like 'latest', 'master', 'enterprise'.
 // Just want things like v1.2*
-
 if ( true == via_webhook() && (!(rancher_version() ==~ /^v\d+.+$/)) ) {
   currentBuild.result = lastBuildResult()
 } else {
@@ -210,9 +221,9 @@ if ( true == via_webhook() && (!(rancher_version() ==~ /^v\d+.+$/)) ) {
 	    }
 
 	    stage ('run validation tests') {
-	    
-	      CATTLE_TEST_URL = readFile('cattle_test_url').trim()
-	    
+
+	      CATTLE_TEST_URL = readFile(cattle_test_url_filname()).trim()
+	      
 	      withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}", "K8S_DEPLOY=${k8s_deploy()}"]) {
 		sh "git clone https://github.com/rancher/validation-tests"
 		try {

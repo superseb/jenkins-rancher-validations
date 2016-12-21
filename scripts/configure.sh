@@ -4,7 +4,7 @@ set -eu
 
 DEBUG="${DEBUG:-false}"
 
-env | egrep '^(RANCHER_|AWS_|DEBUG|DOCKER_).*\=.+' | sort > .env
+env | egrep '^(RANCHER_|AWS_|DEBUG|DOCKER_|BUILD_NUMBER).*\=.+' | sort > .env
 
 if [ "false" != "${DEBUG}" ]; then
     cat .env
