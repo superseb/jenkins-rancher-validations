@@ -216,7 +216,7 @@ class RancherServer(object):
                 server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
 
                 try:
-                        ec2_node_ensure(self.name())
+                        ec2_node_ensure(self.name(), instance_type=os.environ.get('RANCHER_SERVER_AWS_INSTANCE_TYPE'))
 
                         # CoreOS and RancherOS ship w/ vendored Docker engine
                         if 'rancher' not in server_os and 'core' not in server_os:

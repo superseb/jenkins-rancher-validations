@@ -629,13 +629,12 @@ def ec2_ensure_ssh_keypair(nodename):
 
 
 #
-def ec2_node_ensure(nodename):
+def ec2_node_ensure(nodename, instance_type='m4.large'):
     log_info("Ensuring node '{}'...".format(nodename))
 
     server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
     os_settings = os_to_settings(server_os)
     sgids = [str(os.environ['AWS_SECURITY_GROUP_ID']).rstrip()]
-    instance_type = str(os.environ['RANCHER_SERVER_AWS_INSTANCE_TYPE']).rstrip()
     zone = str(os.environ['AWS_ZONE']).rstrip()
     region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
     placement = {'AvailabilityZone': '{}{}'.format(region, zone)}
