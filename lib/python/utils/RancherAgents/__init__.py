@@ -83,10 +83,12 @@ class RancherAgents(object):
                 if version.minor not in [1, 2, 3]:
                         raise RancherServerError("Minor version '{}' from '{}' is not supported!".format(version.minor, os.environ.get('RANCHER_VERSION')))
 
-                if version.minor == 1:
+                if 1 == version.minor:
                         rancher_url = "http://{}:8080/v1/schemas".format(RancherServer().IP())
-                elif [2, 3, 4] in version.minor:
+                        rancher_bin = 'rancher-114'
+                elif version.minor in [2, 3, 4]:
                         rancher_url = "http://{}:8080/v2-beta/schemas".format(RancherServer().IP())
+                        rancher_bin = 'rancher'
 
                 os.environ['RANCHER_URL'] = rancher_url
 
@@ -99,7 +101,8 @@ class RancherAgents(object):
                 while actual_count < count and elapsed_time < timeout:
                         try:
                                 sleep(sleep_step)
-                                result = run('rancher host list -q | grep active| wc -l', echo=True)
+                                cmd = "{} host list -q | grep active | wc -l".format(rancher_bin)
+                                result = run(cmd, echo=True)
                                 actual_count = int(result.stdout.rstrip())
                                 elapsed_time = time() - start_time
                                 log_info("{} seconds elapsed waiting for {} active Rancher Agents...".format(elapsed_time, count))
