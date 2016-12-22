@@ -22,11 +22,17 @@ def aws_prefix() {
 }
 
 
+// Post-run sleep before infras is deprovisioned
+def pipeline_deprovision_delay_mins() {
+  try { if ('' != PIPELINE_DEPROVISION_DELAY_MINS) { return PIPELINE_DEPROVISION_DELAY_MINS } }
+  catch (MissingPropertyException e) { return 0 }
+}
+
+
 // Stop the pipeline after provision / deprovision for QA to do something manual
 def pipeline_provision_stop() {
   try { if ('' != PIPELINE_PROVISION_STOP) { return PIPELINE_PROVISION_STOP } }
   catch (MissingPropertyException e) { return false }
-    
 }
 
 def pipeline_deprovision_stop() {
@@ -236,6 +242,14 @@ if ( true == via_webhook() && (!(rancher_version() ==~ /^v\d+.+$/)) ) {
 	    
 	      step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
 	    }
+
+	    if ( 0 != pipeline_deprovision_delay_mins() ) {
+	      stage ('configured sleep before infra deprovision') {
+		println("Sleeping for ${PIPELINE_DEPROVISION_DELAY_MINS} minutes before deprovisioning infra....")
+		def delay_mins = pipeline_deprovision_delay_mins() as int
+		sleep( 60 * delay_mins)
+	      }
+	    }
 	    
 	    stage ('deprovision Rancher Agents') {
 	      sh "docker run --rm  " +
@@ -250,11 +264,17 @@ if ( true == via_webhook() && (!(rancher_version() ==~ /^v\d+.+$/)) ) {
 		"--env-file .env " +
 		"rancherlabs/ci-validation-tests rancher_server.deprovision"
 	    }
+
 	  } // PIPELINE_PROVISION_STOP
 	} // PIPELINE_DEPROVISION_STOP
       } // wrap
     } // node
-  } catch(err) { currentBuild.result = 'FAILURE' }
+  } catch(err) {
+    currentBuild.result = 'FAILURE'
+    println(err.toString())
+    println(err.getMessage())
+    println(err.getStackTrace())
+  }
 }
 
 jenkinsSlack('finish')
