@@ -1,4 +1,4 @@
-import os
+import os, semver
 
 from invoke import run, Failure
 from time import sleep, time
@@ -74,7 +74,20 @@ class RancherAgents(object):
 
         #
         def __wait_on_active_agents(self, count):
-                rancher_url = "http://{}:8080/v2-beta/schemas".format(RancherServer().IP())
+
+                rancher_version = os.environ['RANCHER_VERSION']
+                version = semver.parse_version_info(rancher_version.replace('v', ''))
+
+                if 1 != version.major:
+                        raise RancherServerError("Major version '{}' from '{}' is not supported!".format(version.major, os.environ.get('RANCHER_VERSION')))
+                if version.minor not in [1, 2, 3]:
+                        raise RancherServerError("Minor version '{}' from '{}' is not supported!".format(version.minor, os.environ.get('RANCHER_VERSION')))
+
+                if version.minor == 1:
+                        rancher_url = "http://{}:8080/v1/schemas".format(RancherServer().IP())
+                elif [2, 3, 4] in version.minor:
+                        rancher_url = "http://{}:8080/v2-beta/schemas".format(RancherServer().IP())
+
                 os.environ['RANCHER_URL'] = rancher_url
 
                 actual_count = 0

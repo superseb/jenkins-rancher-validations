@@ -7,3 +7,4 @@ flake8==3.0.4
 autopep8==1.2.4
 boto3==1.4.0
 botocore==1.4.72
+semver==2.7.3

@@ -1,4 +1,4 @@
-import os, boto3
+import os, boto3, semver
 
 from invoke import Failure
 from requests import ConnectionError, HTTPError
@@ -246,9 +246,25 @@ class RancherServer(object):
         def __set_reg_token(self):
                 log_info("Setting the initial agent reg token...")
 
-                reg_url = "http://{}:8080/v2-beta/projects/1a5/registrationtokens".format(self.IP())
+                reg_url = None
+
                 try:
+                        rancher_version = os.environ['RANCHER_VERSION']
+                        version = semver.parse_version_info(rancher_version.replace('v', ''))
+
+                        if 1 != version.major:
+                                raise RancherServerError("Major version '{}' from '{}' is not supported!".format(version.major, os.environ.get('RANCHER_VERSION')))
+
+                        if version.minor not in [1, 2, 3]:
+                                raise RancherServerError("Minor version '{}' from '{}' is not supported!".format(version.minor, os.environ.get('RANCHER_VERSION')))
+
+                        if 1 == version.minor:
+                                reg_url = "http://{}:8080/v1/projects/1a5/registrationtokens".format(self.IP())
+                        elif version.minor in [2, 3]:
+                                reg_url = "http://{}:8080/v2-beta/projects/1a5/registrationtokens".format(self.IP())
+
                         response = request_with_retries('POST', reg_url, step=20, attempts=20)
+
                 except RancherServerError as e:
                         msg = "Failed creating initial agent registration token! : {}".format(e.message)
                         log_debug(msg)
@@ -261,7 +277,19 @@ class RancherServer(object):
         #
         def reg_command(self):
                 try:
-                        query_url = "http://{}:8080/v2-beta/projects/1a5/registrationtokens?state=active&limit=-1&sort=name".format(self.IP())
+                        rancher_version = os.environ['RANCHER_VERSION']
+                        version = semver.parse_version_info(rancher_version.replace('v', ''))
+
+                        if 1 != version.major:
+                                raise RancherServerError("Major version '{}' in '{}' not supported!".format(version.major, rancher_version))
+                        if version.minor not in [1, 2, 3]:
+                                raise RancherServerError("Minor version '{}' in '{}' not supported!".format(version.minor, rancher_version))
+
+                        if 1 == version.minor:
+                                query_url = "http://{}:8080/v1/projects/1a5/registrationtokens?state=active&limit=-1&sort=name".format(self.IP())
+                        elif version.minor in [2, 3]:
+                                query_url = "http://{}:8080/v2-beta/projects/1a5/registrationtokens?state=active&limit=-1&sort=name".format(self.IP())
+
                         response = request_with_retries('GET', query_url)
                         reg_command = response.json()['data'][0]['command']
                         log_debug("reg command: {}".format(reg_command))
@@ -277,20 +305,34 @@ class RancherServer(object):
         def __set_reg_url(self):
                 log_info("Setting the agent registration URL...")
 
-                reg_url = "http://{}:8080/v2-beta/settings/api.host".format(self.IP())
+                reg_url = None
+                request_data = {
+                        "type": "activeSetting",
+                        "name": "api.host",
+                        "activeValue": "",
+                        "inDb": False,
+                        "source": "",
+                        "value": "http://{}:8080".format(self.IP())
+                }
+
                 try:
-                        request_data = {
-                                "type": "activeSetting",
-                                "name": "api.host",
-                                "activeValue": "",
-                                "inDb": False,
-                                "source": "",
-                                "value": "http://{}:8080".format(self.IP())
-                        }
+                        # remove the 'v' prefix so we can user semver functions
+                        rancher_version = str(os.environ['RANCHER_VERSION'])
+                        version = semver.parse_version_info(rancher_version.replace('v', ''))
+
+                        if 1 != version.major:
+                                raise RancherServerError("Major version '{}' in '{}' not supported!".format(version.major, rancher_version))
+                        if version.minor not in [1, 2, 3]:
+                                raise RancherServerError("Minor version '{}' in '{}' not supported!".format(version.minor, rancher_version))
+
+                        if 1 == version.minor:
+                                reg_url = "http://{}:8080/v1/settings/api.host".format(self.IP())
+                        elif version.minor in [2, 3]:
+                                reg_url = "http://{}:8080/v2-beta/settings/api.host".format(self.IP())
 
                         response = request_with_retries('PUT', reg_url, request_data)
 
-                except Failure as e:
+                except (Failure, RancherServerError) as e:
                         msg = "Failed setting the agent registration URL! : {}".format(str(e))
                         log_debug(msg)
                         raise RancherServerError(msg) from e
@@ -310,8 +352,8 @@ class RancherServer(object):
                         self.__set_reg_url()
 
                 except RancherServerError as e:
-                        msg = "Failed while configuring Rancher server \'{}\'!: {}".format(self.__name(), e.message)
+                        msg = "Failed while configuring Rancher server \'{}\'!: {}".format(self.__name__, e.message)
                         log_debug(msg)
-                        raise RancherServer(msg) from e
+                        raise RancherServerError(msg) from e
 
                 return True
