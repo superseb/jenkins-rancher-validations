@@ -2,12 +2,12 @@ FROM python:3
 MAINTAINER Nathan Valentine <nathan@rancher.com|nrvale0@gmail.com>
 
 ARG OPTDIR=/opt/nrvale0
-ARG BINDIR="${OPTDIR}/bin"
+ARG BINDIR=${OPTDIR}/bin
 ARG BUILDCACHE=/tmp/build
 ARG WORKDIR=/workdir
 
 ENV TERM=ansi DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true
-ENV PATH "${BINDIR}:/opt/puppetlabs/bin:/opt/puppetlabs/puppet/bin:/usr/local/bin:/bin:/sbin:/usr/bin:/usr/sbin"
+ENV PATH ${BINDIR}:/opt/puppetlabs/bin:/opt/puppetlabs/puppet/bin:/usr/local/bin:/bin:/sbin:/usr/bin:/usr/sbin
 
 RUN mkdir -p "${BUILDCACHE}" "${BINDIR}" "${WORKDIR}"
 
@@ -23,45 +23,46 @@ RUN apt-get update && \
 
 # for AWS VPC provisioning
 ARG PUPPET_RELEASE_URI=https://apt.puppetlabs.com/puppetlabs-release-pc1-jessie.deb
-ADD "${PUPPET_RELEASE_URI} ${BUILDCACHE}/"
+ADD ${PUPPET_RELEASE_URI} ${BUILDCACHE}/
 RUN dpkg -i ${BUILDCACHE}/puppetlabs*.deb && \
     apt-get update && \
     apt-get install -y puppet-agent zip && \
     puppet resource service puppet ensure=stopped enable=false && \
-    gem install puppet-lint librarian-puppet aws-sdk-core retries && \
-    apt-get clean all && \
-    rm -rf "${BUILDCACHE}/puppetlabs*.deb"
+    gem install --no-ri --no-rdoc puppet-lint librarian-puppet aws-sdk-core retries && \
+    rm -rfv ${BUILDCACHE}/puppetlabs*.deb && \
+    apt-get clean all 
 ADD ./lib/puppet/Puppetfile /etc/puppetlabs/code/
 
 # for various operations against Rancher API
-ARG RANCHER_CLI_URI=https://github.com/rancher/cli/releases/download/v0.3.0-rc3/rancher-linux-amd64-v0.3.0-rc3.tar.gz
-ADD "${RANCHER_CLI_URI} ${BUILDCACHE}/"
+ARG RANCHER_CLI_URI=https://github.com/rancher/cli/releases/download/v0.4.1/rancher-linux-amd64-v0.4.1.tar.gz
+ADD ${RANCHER_CLI_URI} ${BUILDCACHE}/
+RUN (cd ${BUILDCACHE} && \
+      tar zxvf rancher-* && \
+      cp rancher-v*/rancher ${BINDIR}/) && \
+      chmod +x ${BINDIR}/rancher && \
+      rm -rfv ${BUILDCACHE}/rancher*
+
+# an older version of Rancher CLI is needed for Rancher version 1.1.4
+ARG RANCHER_CLI_URI_v114=https://github.com/rancher/cli/releases/download/v0.1.0-rc3/rancher-linux-amd64-v0.1.0-rc3.tar.gz
+ADD ${RANCHER_CLI_URI_v114} ${BUILDCACHE}/
 RUN (cd "${BUILDCACHE}" && \
       tar zxvf rancher-* && \
-      cp rancher-v*/rancher "${BINDIR}/") && \
-      chmod +x "${BINDIR}/rancher" && \
-      rm -rf "${BUILDCACHE}/rancher*"
+      cp rancher-v*/rancher "${BINDIR}/rancher-114") && \
+      chmod +x "${BINDIR}/rancher-114" && \
+      rm -rfv "${BUILDCACHE}/rancher*"
 
 # for provisioning of AWS EC2 instances
 ARG DOCKER_MACHINE_URI=https://github.com/docker/machine/releases/download/v0.8.2/docker-machine-Linux-x86_64
-ADD "${DOCKER_MACHINE_URI} ${BINDIR}/docker-machine"
-RUN chmod +x "${BINDIR}/docker-machine"
-
-ARG TERRAFORM_URI=https://releases.hashicorp.com/terraform/0.7.7/terraform_0.7.7_linux_amd64.zip
-ADD "${TERRAFORM_URI} ${BUILDCACHE}/"
-RUN (cd "${BUILDCACHE}" && \
-    unzip terraform*.zip && \
-    chmod +x terraform && \
-    cp terraform "${BINDIR}/") && \
-    rm -rf "${BUILDCACHE}/terraform*"
+ADD ${DOCKER_MACHINE_URI} ${BINDIR}/docker-machine
+RUN chmod +x ${BINDIR}/docker-machine
 
 # the scripts for CMD
-ADD ./lib "${WORKDIR}/lib/"
-ADD ./tasks.py "${WORKDIR}"
+ADD ./lib ${WORKDIR}/lib/
+ADD ./tasks.py ${WORKDIR}
 
-RUN (cd "${WORKDIR}" && \
+RUN (cd ${WORKDIR} && \
     pip install -r ./lib/python/requirements.txt)
 
 ADD Dockerfile /opt/nrvale0
-WORKDIR "${WORKDIR}"
+WORKDIR ${WORKDIR}
 ENTRYPOINT ["invoke"]
