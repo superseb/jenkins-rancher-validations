@@ -213,14 +213,22 @@ class RancherServer(object):
 
         #
         def provision(self):
-                server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
-
                 try:
-                        ec2_node_ensure(self.name(), instance_type=os.environ.get('RANCHER_SERVER_AWS_INSTANCE_TYPE'))
+                        server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+                        server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+                        os_settings = os_to_settings(server_os)
+                        region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
+                        ssh_user = os_settings['ssh_username']
 
-                        # CoreOS and RancherOS ship w/ vendored Docker engine
-                        if 'rancher' not in server_os and 'core' not in server_os:
-                                self.__docker_install()
+                        ec2_node_ensure(self.name(), instance_type=os.environ.get('RANCHER_SERVER_AWS_INSTANCE_TYPE'))
+                        node_addr = ec2_node_public_ip(self.name(), region=region)
+
+                        SCP(self.name(), node_addr, ssh_user, './lib/bash/*.sh', '/tmp/')
+                        SSH(self.name(), node_addr, ssh_user, 'chmod +x /tmp/*.sh && /tmp/rancher_ci_bootstrap.sh')
+
+#                        # CoreOS and RancherOS ship w/ vendored Docker engine
+#                        if 'rancher' not in server_os and 'core' not in server_os:
+#                               self.__docker_install()
 
                         self.__install_server_container()
 
