@@ -135,8 +135,10 @@ class RancherServer(object):
                                 log_info("No nodes matching name '{}' to deprovision.".format(self.name()))
 
                         elif len(reservations) > 1:
-                                log_warn("Found more than one instance matching name '{}'. That's very strange!")
-                                log_warn("Halting deprovisioning. Please resolve naming conclict manually.")
+                                msg = "Found more than one instance matching name '{}'. That's very strange!"
+                                log_warn(msg)
+                                log_warn("Halting deprovisioning. Please resolve naming conflict manually.")
+                                raise RancherServerError(msg)
 
                         else:
                                 instance_id = reservations[0]['Instances'][0]['InstanceId']
