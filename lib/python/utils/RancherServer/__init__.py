@@ -215,7 +215,6 @@ class RancherServer(object):
         def provision(self):
                 try:
                         server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
-                        server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
                         os_settings = os_to_settings(server_os)
                         region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
                         ssh_user = os_settings['ssh_username']
