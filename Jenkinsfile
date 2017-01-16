@@ -131,7 +131,13 @@ def cattle_test_url_filename() {
 
 // Filter out Docker Hub tags like 'latest', 'master', 'enterprise'.
 // Just want things like v1.2*
-if ( true == via_webhook() && (!(rancher_version() ==~ /^v\d+.+$/)) ) {
+def rancher_version = rancher_version()
+def rancher_version_regex = /^v\d+.$/
+
+
+if ( true == via_webhook() && (!(rancher_version() ==~ rancher_version_regex)) ) {
+  println("Received RANCHER_VERSION \'${rancher_version}\' via webhook which does not match regex \'${rancher_version_regex}\'.")
+  println("** This will **not** result in a pipeline run.")
   currentBuild.result = lastBuildResult()
 } else {
 
@@ -160,7 +166,6 @@ if ( true == via_webhook() && (!(rancher_version() ==~ /^v\d+.+$/)) ) {
 	}
 	
 	stage ('configure .env file') {
-	  def rancher_version = rancher_version()
 	  withEnv(["RANCHER_VERSION=${rancher_version}"]) {
 	    sh "./scripts/configure.sh"
 	  }
