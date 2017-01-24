@@ -57,6 +57,13 @@ def slack_channel() {
 }
 
 
+// PIPELINE_POST_SERVER_WAIT will specify duration in seconds to wait on infrastructure catalogs to deploy to Agents
+def post_server_wait() {
+  try { if ('' != PIPELINE_POST_SERVER_WAIT) { return PIPELINE_POST_SERVER_WAIT } }
+  catch (MissingPropertyException e) { return '600' }
+}
+
+
 // simplify the generation of Slack notifications for start and finish of Job
 def jenkinsSlack(type) {
   channel = slack_channel()
@@ -220,9 +227,12 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 
 	  if ( "false" == "${PIPELINE_PROVISION_STOP}" ) {
 	    stage ('wait for infra catalogs to settle...') {
-	      sh "echo 'Sleeping for 10 minutes while we wait on infrastructure catalogs to deploy to Agents....'"
-	      sh "sleep 600"
-	    }
+	      post_server_wait = post_server_wait()
+	      withEnv(["PIPELINE_POST_SERVER_WAIT=${post_server_wait}"]) {
+	        sh "echo 'Sleeping for ${PIPELINE_POST_SERVER_WAIT} seconds while we wait on infrastructure catalogs to deploy to Agents....'"
+                sh "sleep ${PIPELINE_POST_SERVER_WAIT}"
+              }
+            }
 
 	    stage ('run validation tests') {
 
