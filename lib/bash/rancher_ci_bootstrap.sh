@@ -104,7 +104,7 @@ docker_version_match_rhel() {
     local docker_version
     docker_version="$(ec2_tag_get_docker_version)" || exit $?
     
-    docker_version_match="$(sudo yum --showduplicates list docker-engine  | grep ${docker_version} | sort -n | head -n1 | awk -F' ' '{print $2}')" || exit $?
+    docker_version_match="$(sudo yum --showduplicates list docker-engine  | grep ${docker_version} | sort -rn | head -n1 | awk -F' ' '{print $2}')" || exit $?
     if [ -z "${docker_version_match}" ]; then
 	echo "Failed while detecting a distro package match for specified Docker version '${docker_version}'!"
 	exit 1
