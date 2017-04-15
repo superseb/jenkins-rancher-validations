@@ -185,6 +185,23 @@ class RancherServer(object):
                          raise RancherServerError(msg)
 
         #
+        def __upgrade_server_container(self):
+
+                rancher_new_version = str(os.environ['RANCHER_NEW_VERSION']).rstrip()
+                server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+                os_settings = os_to_settings(server_os)
+
+                log_info('upgrading rancher/server to version:{}...'.format(rancher_version))
+
+                try:
+                         SSH(self.name(), self.IP(), os_settings['ssh_username'], '/tmp/rancher_upgrade.sh')
+
+                except SSHError as e:
+                         msg = "Failed while upgrading rancher/server container!: {}".format(str(e))
+                         log_debug(msg)
+                         raise RancherServerError(msg)
+
+        #
         def __docker_install(self):
                 docker_version = ec2_tag_value(self.name(), 'rancher.docker.version')
 
@@ -251,6 +268,19 @@ class RancherServer(object):
                         log_debug(msg)
                         raise RancherServerError(msg) from e
 
+        def upgrade(self):
+                log_info("Upgrading rancher server container...")
+                try:
+                        ec2_node_ensure(self.name(), instance_type=os.environ.get('RANCHER_SERVER_AWS_INSTANCE_TYPE'))
+                        self.__upgrade_server_container()
+
+                        log_info("Wait until the new server starts and agents register back")
+                        sleep(90)
+
+                except RuntimeError as e:
+                        msg = "Failed while upgrading Rancher Server!: {}".format(str(e))
+                        log_debug(msg)
+                        raise RancherServerError(msg) from e
         #
         def __set_reg_token(self):
                 log_info("Setting the initial agent reg token...")
