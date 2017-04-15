@@ -191,7 +191,7 @@ class RancherServer(object):
                 server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
                 os_settings = os_to_settings(server_os)
 
-                log_info('upgrading rancher/server from version:{} to version:{}...'.format(rancher_version,rancher_new_version))
+                log_info('upgrading rancher/server from version:{} to version:{}...'.format(rancher_version, rancher_new_version))
 
                 try:
                          SSH(self.name(), self.IP(), os_settings['ssh_username'], '/tmp/rancher_upgrade.sh')
