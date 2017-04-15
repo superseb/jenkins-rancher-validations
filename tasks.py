@@ -127,7 +127,7 @@ def rancher_server_provision(ctx):
     return result
 
 @task
-def rancher_server_updgrade(ctx):
+def rancher_server_upgrade(ctx):
     """
     Upgrade Rancher Server container.
     """
