@@ -11,7 +11,7 @@ set -uxe
 upgrade_rancher_container() {
 
     cont_no=$(sudo docker ps -qa | wc -l)
-    if [ ${cont_no} > 1 ]; then
+    if [ ${cont_no} -gt 1 ]; then
       echo 'More than one container exist on Rancher server.. exiting'
       exit 1
     fi

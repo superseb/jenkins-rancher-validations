@@ -178,6 +178,18 @@ def rancher_agents_provision(ctx):
 
 
 @task
+def rancher_server_k8s_stack(ctx):
+    """
+    Install k8s stack on the Default environment.
+    """
+    try:
+        RancherServer().k8s_stack()
+    except RancherServerError as e:
+        err_and_exit("Failed to Install k8s stack! : {}".format(e.message))
+    log_success("K8s stack installing : [OK]")
+
+
+@task
 def aws_provision(ctx):
     """
     Provision AWS.
@@ -206,6 +218,7 @@ rs.add_task(rancher_server_deprovision, 'deprovision')
 # rs.add_task(rancher_server_validate, 'validate')
 rs.add_task(rancher_server_configure, 'configure')
 rs.add_task(rancher_server_upgrade, 'upgrade')
+rs.add_task(rancher_server_k8s_stack, 'k8s_stack')
 ns.add_collection(rs)
 
 ra = Collection('rancher_agents')

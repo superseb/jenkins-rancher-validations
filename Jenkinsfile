@@ -273,13 +273,27 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
   	      step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
   	    }
       } else {
+        stage ('provision Rancher Agents') {
+  	      sh "docker run --rm  " +
+  		"-v \"\$(pwd)\":/workdir " +
+  		"--env-file .env " +
+  		"rancherlabs/ci-validation-tests rancher_agents.provision"
+  	    }
+        // To run the upgrade tests on the same environment we have to install k8s
+        // on the Default environment..
+        stage ('install k8s stack') {
+  	      sh "docker run --rm  " +
+  		"-v \"\$(pwd)\":/workdir " +
+  		"--env-file .env " +
+  		"rancherlabs/ci-validation-tests rancher_agents.k8s_stack"
+  	    }
+
         stage ('Run Pre-upgrade Tests') {
 
   	      CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
 
   	      withEnv([
             "CATTLE_TEST_URL=${CATTLE_TEST_URL}",
-            "K8S_DEPLOY=${k8s_deploy()}",
             "UPRGADE_TESTING=true",
             "PRE_UPGRADE_NAMESPACE=${k8s_pre_upgrade_namespace()}",
             "PRE_PORT_EXT=${k8s_pre_upgrade_portext()}"]) {
