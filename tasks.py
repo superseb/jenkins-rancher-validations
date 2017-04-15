@@ -126,6 +126,7 @@ def rancher_server_provision(ctx):
     log_success("Rancher Server provisioning : [OK]")
     return result
 
+
 @task
 def rancher_server_upgrade(ctx):
     """
