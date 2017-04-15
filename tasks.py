@@ -126,6 +126,18 @@ def rancher_server_provision(ctx):
     log_success("Rancher Server provisioning : [OK]")
     return result
 
+@task
+def rancher_server_update(ctx):
+    """
+    Upgrade Rancher Server container.
+    """
+    try:
+        result = RancherServer().upgrade()
+    except RancherServerError as e:
+        err_and_exit("Failed to upgrade Rancher Server container! : {}".format(e.message))
+    log_success("Rancher Server upgrade : [OK]")
+    return result
+
 
 # @task
 # def rancher_server_validate(ctx):
@@ -192,6 +204,7 @@ rs.add_task(rancher_server_provision, 'provision')
 rs.add_task(rancher_server_deprovision, 'deprovision')
 # rs.add_task(rancher_server_validate, 'validate')
 rs.add_task(rancher_server_configure, 'configure')
+rs.add_task(rancher_server_upgrade, 'upgrade')
 ns.add_collection(rs)
 
 ra = Collection('rancher_agents')
