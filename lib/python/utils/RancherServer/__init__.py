@@ -345,7 +345,7 @@ class RancherServer(object):
 
             catalog_url = "http://{}:8080/v1-catalog/templates/library:infra*k8s".format(self.IP())
             # Deploy Catalog template from catalog
-            r = requests.get(catalog_url + ":" + str(t_version))
+            r = request_with_retries('GET', catalog_url + ":" + str(t_version))
             template = json.loads(r.content)
             r.close()
             dockerCompose = template["files"]["docker-compose.yml.tpl"]
@@ -355,24 +355,24 @@ class RancherServer(object):
             try:
                     request_data = {
                             "system": True,
-                            "type":"stack",
-                            "name":"kubernetes",
+                            "type": "stack",
+                            "name": "kubernetes",
                             "startOnCreate": True,
                             "dockerCompose": dockerCompose,
                             "environment": {
-                                "CONSTRAINT_TYPE":"none",
-                                "CLOUD_PROVIDER":"rancher",
-                                "REGISTRY":"",
-                                "DISABLE_ADDONS":"false",
-                                "POD_INFRA_CONTAINER_IMAGE":"gcr.io/google_containers/pause-amd64:3.0",
+                                "CONSTRAINT_TYPE": "none",
+                                "CLOUD_PROVIDER": "rancher",
+                                "REGISTRY": "",
+                                "DISABLE_ADDONS": "false",
+                                "POD_INFRA_CONTAINER_IMAGE": "gcr.io/google_containers/pause-amd64:3.0",
                                 "EMBEDDED_BACKUPS": True,
-                                "BACKUP_PERIOD":"15m0s",
-                                "BACKUP_RETENTION":"24h",
-                                "ETCD_HEARTBEAT_INTERVAL":"500",
-                                "ETCD_ELECTION_TIMEOUT":"5000"
+                                "BACKUP_PERIOD": "15m0s",
+                                "BACKUP_RETENTION": "24h",
+                                "ETCD_HEARTBEAT_INTERVAL": "500",
+                                "ETCD_ELECTION_TIMEOUT": "5000"
                             },
                             "rancherCompose": rancherCompose,
-                            externalId: "catalog://{}".format(str(defaultVersionId))
+                            "externalId": "catalog://{}".format(str(defaultVersionId))
                     }
 
                     stack_url = "http://{}:8080/v2-beta/projects/1a5/stack".format(self.IP())
