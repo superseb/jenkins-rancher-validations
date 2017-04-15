@@ -26,7 +26,7 @@ def aws_prefix() {
 def pipeline_provision_stop() {
   try { if ('' != PIPELINE_PROVISION_STOP) { return PIPELINE_PROVISION_STOP } }
   catch (MissingPropertyException e) { return false }
-    
+
 }
 
 def pipeline_deprovision_stop() {
@@ -70,7 +70,7 @@ def jenkinsSlack(type) {
   aws_prefix = aws_prefix()
   def rancher_version = rancher_version()
   def jobInfo = "\n » ${aws_prefix} ${rancher_version} :: ${JOB_NAME} #${env.BUILD_NUMBER} (<${env.BUILD_URL}|job>) (<${env.BUILD_URL}/console|console>)"
-  
+
   if (type == 'start'){
     slackSend channel: channel, color: 'blue', message: "build started${jobInfo}"
   }
@@ -108,16 +108,61 @@ def k8s_deploy() {
   catch (MissingPropertyException e) {}
 }
 
+// pre upgrade tests code needs PRE_UPGRADE_NAMESPACE variable
+def k8s_pre_upgrade_namespace() {
+  try { if ('' != PRE_UPGRADE_NAMESPACE) { return PRE_UPGRADE_NAMESPACE } }
+  catch (MissingPropertyException e) { return 'pre-upgrade-ns' }
+}
+
+// pre upgrade tests code needs PRE_PORT_EXT variable
+def k8s_pre_upgrade_portext() {
+  try { if ('' != PRE_PORT_EXT) { return PRE_PORT_EXT } }
+  catch (MissingPropertyException e) { return '8' }
+}
+
+// pre upgrade tests code needs POST_UPGRADE_NAMESPACE variable
+def k8s_post_upgrade_namespace() {
+  try { if ('' != POST_UPGRADE_NAMESPACE) { return POST_UPGRADE_NAMESPACE } }
+  catch (MissingPropertyException e) { return 'post-upgrade-ns' }
+}
+
+// post upgrade tests code needs POST_PORT_EXT variable
+def k8s_post_upgrade_portext() {
+  try { if ('' != POST_PORT_EXT) { return POST_PORT_EXT } }
+  catch (MissingPropertyException e) { return '9' }
+}
+
+// compute the appropriate pre upgrade test command if the user has not specifically supplied one
+def pre_upgrade_tests_cmd() {
+  if ( "k8s" == "${RANCHER_ORCHESTRATION}" ) {
+    return "py.test -s --junit-xml=results.xml -k 'test_pre_upgrade_validate_stack' validation-tests/tests/v2_validation/cattlevalidationtest/core/test_upgrade.py"
+
+  } else {
+    // Waiting for cattle upgrade PR
+    return "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/"
+  }
+}
+
+// compute the appropriate pre upgrade test command if the user has not specifically supplied one
+def post_upgrade_tests_cmd() {
+  if ( "k8s" == "${RANCHER_ORCHESTRATION}" ) {
+    return "py.test -s --junit-xml=results.xml -k 'test_post_upgrade_validate_stack' validation-tests/tests/v2_validation/cattlevalidationtest/core/test_upgrade.py"
+
+  } else {
+    // Waiting for cattle upgrade PR
+    return "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/"
+  }
+}
 
 // compute the appropriate validation tests command if the user has not specifically supplied one
 def validation_tests_cmd() {
-  
+
   if ( "true" == "${PIPELINE_SMOKE_TEST_ONLY}" ) {
     return "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/core/test_container_run_option.py"
-    
+
   } else if ( "k8s" == "${RANCHER_ORCHESTRATION}" ) {
     return "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/core/test_k8*"
-    
+
   } else {
     return "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/"
   }
@@ -148,7 +193,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 } else {
 
   try {
-    
+
     node {
       wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
 
@@ -170,7 +215,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 	    "-v \"\$(pwd)\":/workdir " +
 	    "rancherlabs/ci-validation-tests lint"
 	}
-	
+
 	stage ('configure .env file') {
 	  withEnv(["RANCHER_VERSION=${rancher_version}"]) {
 	    sh "./scripts/configure.sh"
@@ -183,7 +228,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 	    "--env-file .env " +
 	    "rancherlabs/ci-validation-tests rancher_agents.deprovision"
 	}
-	
+
 	stage ('deprovision rancher/server') {
 	  sh "docker run --rm  " +
 	    "-v \"\$(pwd)\":/workdir " +
@@ -192,7 +237,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 	}
 
 	if ( "false" == "${PIPELINE_DEPROVISION_STOP}" ) {
-	  
+
 	  // stage ('provision AWS') {
 	  //   sh "docker run --rm  " +
 	  //     "-v \"\$(pwd)\":/workdir " +
@@ -206,7 +251,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 	      "--env-file .env " +
 	      "rancherlabs/ci-validation-tests rancher_server.provision"
 	  }
-	  
+
 	  stage ('configure rancher/server') {
 	    sh "docker run --rm  " +
 	      "-v \"\$(pwd)\":/workdir " +
@@ -217,12 +262,12 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 	  // this should be a temporary hack until the pipeline re-claims k8s agent
 	  // provisioning from the validation-tests code. Talk to @sangeetha.
 	  if ( 'k8s' != "${RANCHER_ORCHESTRATION}" ) {
-	    stage ('provision Rancher Agents') {
-	      sh "docker run --rm  " +
-		"-v \"\$(pwd)\":/workdir " +
-		"--env-file .env " +
-		"rancherlabs/ci-validation-tests rancher_agents.provision"
-	    }
+	    //stage ('provision Rancher Agents') {
+	      //sh "docker run --rm  " +
+		//"-v \"\$(pwd)\":/workdir " +
+		//"--env-file .env " +
+		//"rancherlabs/ci-validation-tests rancher_agents.provision"
+	    //}
 	  }
 
 	  if ( "false" == "${PIPELINE_PROVISION_STOP}" ) {
@@ -233,37 +278,103 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
                 sh "sleep ${PIPELINE_POST_SERVER_WAIT}"
               }
             }
+      if ( "false" == "${K8S_UPGRADE_TESTING}") {
+        stage ('run validation tests') {
 
-	    stage ('run validation tests') {
+  	      CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
 
-	      CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
-	      
-	      withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}", "K8S_DEPLOY=${k8s_deploy()}"]) {
-		sh "git clone https://github.com/rancher/validation-tests"
-		try {
-		def cmd = validation_tests_cmd()
-		sh "${cmd}"
-		} catch(err) {
-		  echo 'Test run had failures. Collecting results...'
-		}
-	      }
-	    
-	      step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
-	    }
-	    
-	    stage ('deprovision Rancher Agents') {
-	      sh "docker run --rm  " +
-		"-v \"\$(pwd)\":/workdir " +
-		"--env-file .env " +
-		"rancherlabs/ci-validation-tests rancher_agents.deprovision"
-	    }
-	    
-	    stage ('deprovision rancher/server') {
-	      sh "docker run --rm  " +
-		"-v \"\$(pwd)\":/workdir " +
-		"--env-file .env " +
-		"rancherlabs/ci-validation-tests rancher_server.deprovision"
-	    }
+  	      withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}", "K8S_DEPLOY=${k8s_deploy()}"]) {
+  		sh "git clone https://github.com/rancher/validation-tests"
+  		try {
+  		def cmd = validation_tests_cmd()
+  		sh "${cmd}"
+  		} catch(err) {
+  		  echo 'Test run had failures. Collecting results...'
+  		}
+  	      }
+
+  	      step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
+  	    }
+      } else {
+        stage ('provision Rancher Agents') {
+  	      sh "docker run --rm  " +
+  		"-v \"\$(pwd)\":/workdir " +
+  		"--env-file .env " +
+  		"rancherlabs/ci-validation-tests rancher_agents.provision"
+  	    }
+        // To run the upgrade tests on the same environment we have to install k8s
+        // on the Default environment..
+        stage ('install k8s stack') {
+  	      sh "docker run --rm  " +
+  		"-v \"\$(pwd)\":/workdir " +
+  		"--env-file .env " +
+  		"rancherlabs/ci-validation-tests rancher_server.k8s_stack"
+  	    }
+
+        stage ('Run Pre-upgrade Tests') {
+
+  	      CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
+
+  	      withEnv([
+            "CATTLE_TEST_URL=${CATTLE_TEST_URL}",
+            "UPRGADE_TESTING=true",
+            "PRE_UPGRADE_NAMESPACE=${k8s_pre_upgrade_namespace()}",
+            "PRE_PORT_EXT=${k8s_pre_upgrade_portext()}"]) {
+  		sh "git clone https://github.com/rancher/validation-tests"
+  		try {
+  		def cmd = pre_upgrade_tests_cmd()
+  		sh "${cmd}"
+  		} catch(err) {
+  		  echo 'Test run had failures. Collecting results...'
+  		}
+  	      }
+
+  	      step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
+  	    }
+
+        stage ('Upgrade Rancher Server') {
+          sh "docker run --rm  " +
+    	      "-v \"\$(pwd)\":/workdir " +
+    	      "--env-file .env " +
+    	      "rancherlabs/ci-validation-tests rancher_server.upgrade"
+        }
+
+      stage ('run post-upgrade tests Phase-1') {
+
+        CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
+
+        withEnv([
+          "CATTLE_TEST_URL=${CATTLE_TEST_URL}",
+          "UPRGADE_TESTING=true",
+          "PRE_UPGRADE_NAMESPACE=${k8s_pre_upgrade_namespace()}",
+          "PRE_PORT_EXT=${k8s_pre_upgrade_portext()}",
+          "POST_UPGRADE_NAMESPACE=${k8s_post_upgrade_namespace()}",
+          "POST_PORT_EXT=${k8s_post_upgrade_portext()}"]) {
+
+    try {
+    def cmd = post_upgrade_tests_cmd()
+    sh "${cmd}"
+    } catch(err) {
+      echo 'Test run had failures. Collecting results...'
+    }
+        }
+
+        step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
+      }
+    }
+	    //stage ('deprovision Rancher Agents') {
+	      //sh "docker run --rm  " +
+		//"-v \"\$(pwd)\":/workdir " +
+		//"--env-file .env " +
+		//"rancherlabs/ci-validation-tests rancher_agents.deprovision"
+	    //}
+
+	    //stage ('deprovision rancher/server') {
+	      //sh "docker run --rm  " +
+		//"-v \"\$(pwd)\":/workdir " +
+		//"--env-file .env " +
+		//"rancherlabs/ci-validation-tests rancher_server.deprovision"
+	    //}
 	  } // PIPELINE_PROVISION_STOP
 	} // PIPELINE_DEPROVISION_STOP
       } // wrap

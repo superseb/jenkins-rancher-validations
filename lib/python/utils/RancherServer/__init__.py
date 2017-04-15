@@ -1,8 +1,8 @@
-import os, boto3
+import os, boto3, json
 
-from invoke import Failure
+from invoke import run, Failure
 from requests import ConnectionError, HTTPError
-from time import sleep
+from time import sleep, time
 from boto3.exceptions import Boto3Error
 from botocore.exceptions import ClientError
 
@@ -185,6 +185,23 @@ class RancherServer(object):
                          raise RancherServerError(msg)
 
         #
+        def __upgrade_server_container(self):
+                rancher_version = str(os.environ['RANCHER_VERSION']).rstrip()
+                rancher_new_version = str(os.environ['RANCHER_NEW_VERSION']).rstrip()
+                server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
+                os_settings = os_to_settings(server_os)
+
+                log_info('upgrading rancher/server from version:{} to version:{}...'.format(rancher_version, rancher_new_version))
+
+                try:
+                         SSH(self.name(), self.IP(), os_settings['ssh_username'], '/tmp/rancher_upgrade.sh {} {}'.format(rancher_version, rancher_new_version))
+
+                except SSHError as e:
+                         msg = "Failed while upgrading rancher/server container!: {}".format(str(e))
+                         log_debug(msg)
+                         raise RancherServerError(msg)
+
+        #
         def __docker_install(self):
                 docker_version = ec2_tag_value(self.name(), 'rancher.docker.version')
 
@@ -251,6 +268,19 @@ class RancherServer(object):
                         log_debug(msg)
                         raise RancherServerError(msg) from e
 
+        def upgrade(self):
+                log_info("Upgrading rancher server container...")
+                try:
+                        self.__upgrade_server_container()
+
+                        log_info("Wait until the new server starts and agents register back")
+                        sleep(90)
+
+                except RuntimeError as e:
+                        msg = "Failed while upgrading Rancher Server!: {}".format(str(e))
+                        log_debug(msg)
+                        raise RancherServerError(msg) from e
+
         #
         def __set_reg_token(self):
                 log_info("Setting the initial agent reg token...")
@@ -309,6 +339,46 @@ class RancherServer(object):
                 return True
 
         #
+        def __install_k8s_stack(self):
+            log_info("Installing kubernetes stack...")
+            catalog_url = "http://{}:8080/v1-catalog/templates/library:infra*k8s".format(self.IP())
+            rancher_url = "http://{}:8080/v2-beta/schemas".format(self.IP())
+            os.environ['RANCHER_URL'] = rancher_url
+            kubernetes_version = os.environ['RANCHER_K8S_CATALOG_VERSION']
+
+            actual_count = 0
+            timeout = 300
+            elapsed_time = 0
+            sleep_step = 30
+            start_time = time()
+
+            # Getting answers
+            response = request_with_retries('GET', catalog_url)
+            k8s_url = response.json()['versionLinks'][kubernetes_version]
+
+            response = request_with_retries('GET', k8s_url)
+            questions = response.json()['questions']
+
+            answers_file = 'answers.txt'
+
+            lines = []
+            for q in questions:
+                lines.append(q['variable'] + "=" + q['default'])
+            lines_conc = "\n".join(lines)
+            with open(answers_file, 'w') as f:
+                    f.write(lines_conc)
+            result = run('rancher --env Default catalog install library/k8s:{} --answers {} --name kubernetes --system'.format(kubernetes_version, answers_file), echo=True)
+            stack_name = result.stdout.rstrip()
+            run('rancher wait {}'.format(stack_name))
+            result = run('rancher inspect {}'.format(stack_name), echo=True)
+            stack_state = json.loads(result.stdout.rstrip())['state']
+
+            if stack_state != 'active':
+                    msg = "Kubernetes still not in healthy state"
+                    log_debug(msg)
+                    raise RancherServerError(msg)
+
+        #
         def configure(self):
                 try:
                         self.__wait_for_api_provider()
@@ -320,6 +390,18 @@ class RancherServer(object):
 
                 except RancherServerError as e:
                         msg = "Failed while configuring Rancher server \'{}\'!: {}".format(self.__name(), e.message)
+                        log_debug(msg)
+                        raise RancherServer(msg) from e
+
+                return True
+
+        #
+        def k8s_stack(self):
+                try:
+                        self.__install_k8s_stack()
+
+                except RancherServerError as e:
+                        msg = "Failed while creating Kubernetes stack \'{}\'!: {}".format(self.__name(), e.message)
                         log_debug(msg)
                         raise RancherServer(msg) from e
 
