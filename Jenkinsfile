@@ -279,6 +279,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 
   	      withEnv([
             "CATTLE_TEST_URL=${CATTLE_TEST_URL}",
+            "K8S_DEPLOY=${k8s_deploy()}",
             "UPRGADE_TESTING=true",
             "PRE_UPGRADE_NAMESPACE=${k8s_pre_upgrade_namespace()}",
             "PRE_PORT_EXT=${k8s_pre_upgrade_portext()}"]) {

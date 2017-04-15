@@ -271,7 +271,6 @@ class RancherServer(object):
         def upgrade(self):
                 log_info("Upgrading rancher server container...")
                 try:
-                        ec2_node_ensure(self.name(), instance_type=os.environ.get('RANCHER_SERVER_AWS_INSTANCE_TYPE'))
                         self.__upgrade_server_container()
 
                         log_info("Wait until the new server starts and agents register back")
