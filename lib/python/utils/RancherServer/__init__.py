@@ -186,12 +186,12 @@ class RancherServer(object):
 
         #
         def __upgrade_server_container(self):
-
+                rancher_version = str(os.environ['RANCHER_VERSION']).rstrip()
                 rancher_new_version = str(os.environ['RANCHER_NEW_VERSION']).rstrip()
                 server_os = str(os.environ['RANCHER_SERVER_OPERATINGSYSTEM']).rstrip()
                 os_settings = os_to_settings(server_os)
 
-                log_info('upgrading rancher/server to version:{}...'.format(rancher_version))
+                log_info('upgrading rancher/server from version:{} to version:{}...'.format(rancher_version,rancher_new_version))
 
                 try:
                          SSH(self.name(), self.IP(), os_settings['ssh_username'], '/tmp/rancher_upgrade.sh')
@@ -281,6 +281,7 @@ class RancherServer(object):
                         msg = "Failed while upgrading Rancher Server!: {}".format(str(e))
                         log_debug(msg)
                         raise RancherServerError(msg) from e
+
         #
         def __set_reg_token(self):
                 log_info("Setting the initial agent reg token...")
