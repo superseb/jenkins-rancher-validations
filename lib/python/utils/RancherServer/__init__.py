@@ -1,4 +1,4 @@
-import os, boto3
+import os, boto3, json
 
 from invoke import Failure
 from requests import ConnectionError, HTTPError
@@ -345,7 +345,7 @@ class RancherServer(object):
 
             catalog_url = "http://{}:8080/v1-catalog/templates/library:infra*k8s".format(self.IP())
             # Deploy Catalog template from catalog
-            r = request_with_retries('GET', catalog_url + ":" + str(t_version))
+            r = request_with_retries('GET', catalog_url)
             template = json.loads(r.content)
             r.close()
             dockerCompose = template["files"]["docker-compose.yml.tpl"]
