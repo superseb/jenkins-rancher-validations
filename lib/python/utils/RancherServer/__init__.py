@@ -369,7 +369,7 @@ class RancherServer(object):
                     f.writelines(lines)
             stack_health = ""
             result = run('rancher --env Default catalog install library/k8s:{} --answers {} --name kubernetes --system'.format(answers_file, kubernetes_version), echo=True)
-            while elapsed_time < timeout and stack_halth == "":
+            while elapsed_time < timeout and stack_health == "":
                     try:
                             sleep(sleep_step)
 
