@@ -340,63 +340,55 @@ class RancherServer(object):
 
         #
         def __install_k8s_stack(self):
-
             log_info("Installing kubernetes stack...")
+            rancher_url = "http://{}:8080/v2-beta/schemas".format(self.IP())
+            os.environ['RANCHER_URL'] = rancher_url
+            rancher_version = os.environ['RANCHER_VERSION']
 
-            catalog_url = "http://{}:8080/v1-catalog/templates/library:infra*k8s".format(self.IP())
-            # Deploy Catalog template from catalog
-            r = request_with_retries('GET', catalog_url)
-            template = json.loads(r.content)
-            r.close()
-            dockerCompose = template["files"]["docker-compose.yml.tpl"]
-            rancherCompose = template["files"]["rancher-compose.yml"]
-            defaultVersionId = template["files"]["defaultTemplateVersionId"]
+            actual_count = 0
+            timeout = 300
+            elapsed_time = 0
+            sleep_step = 30
+            start_time = time()
 
-            try:
-                    request_data = {
-                            "system": True,
-                            "type": "stack",
-                            "name": "kubernetes",
-                            "startOnCreate": True,
-                            "dockerCompose": dockerCompose,
-                            "environment": {
-                                "CONSTRAINT_TYPE": "none",
-                                "CLOUD_PROVIDER": "rancher",
-                                "REGISTRY": "",
-                                "DISABLE_ADDONS": "false",
-                                "POD_INFRA_CONTAINER_IMAGE": "gcr.io/google_containers/pause-amd64:3.0",
-                                "EMBEDDED_BACKUPS": True,
-                                "BACKUP_PERIOD": "15m0s",
-                                "BACKUP_RETENTION": "24h",
-                                "ETCD_HEARTBEAT_INTERVAL": "500",
-                                "ETCD_ELECTION_TIMEOUT": "5000"
-                            },
-                            "rancherCompose": rancherCompose,
-                            "externalId": "catalog://{}".format(str(defaultVersionId))
-                    }
+            answers_file = 'answers.txt'
 
-                    stack_url = "http://{}:8080/v2-beta/projects/1a5/stack".format(self.IP())
-                    response = request_with_retries('POST', stack_url, request_data)
-                    sleep(60)
+            lines = [
+                "CLOUD_PROVIDER=rancher",
+                "REGISTRY=",
+                "DISABLE_ADDONS=false",
+                "POD_INFRA_CONTAINER_IMAGE=gcr.io/google_containers/pause-amd64\:3.0",
+                "EMBEDDED_BACKUPS=true",
+                "BACKUP_PERIOD=15m0s",
+                "BACKUP_RETENTION=24h",
+                "ETCD_HEARTBEAT_INTERVAL=500",
+                "ETCD_ELECTION_TIMEOUT=5000"
+            ]
 
-            except Failure as e:
-                    msg = "Failed to create k8s stack! : {}".format(str(e))
+            with open(answers_file, 'w') as f:
+                    f.writelines(lines)
+            stack_health = ""
+            result = run('rancher --env Default catalog install library/k8s:{} --answers {} --name kubernetes --system'.format(answers_file, kubernetes_version), echo=True)
+            while elapsed_time < timeout and stack_halth == "":
+                    try:
+                            sleep(sleep_step)
+
+                            stack_name = result.stdout.rstrip()
+                            elapsed_time = time() - start_time
+                            log_info("{} seconds elapsed waiting for kubernetes stack...".format(elapsed_time))
+                            stack_health = run('rancher --env Default stack ls -s --format "json" | jq .ID,.State  | grep {} -A1 | grep -o healthy'.format(stack_name), echo=True)
+                            stack_health = stack_health.stdout.rstrip()
+
+                    except Failure as e:
+                            msg = "Failed while trying to install kubernetes stack!: {}".format(str(e))
+                            log_debug(msg)
+                            raise RancherServerError(msg) from e
+
+            restult = run('rancher --env Default stack ls -s --format "json" | jq .ID,.State  | grep {} -A1 | grep -o healthy'.format(stack_name), echo=True)
+            if result.stdout.rstrip() != 'healthy':
+                    msg = "Kubernetes still not in healthy state"
                     log_debug(msg)
-                    raise RancherServerError(msg) from e
-
-        #
-        def __wait_for_k8s(self):
-
-                api_url = "http://{}:8080/r/projects/1a5/kubernetes-dashboard:9090/".format(self.IP())
-                log_info("Polling \'{}\' Kubernetes dashboard...".format(api_url))
-
-                try:
-                        request_with_retries('GET', api_url, step=60, attempts=60)
-                except (ConnectionError, HTTPError) as e:
-                        msg = "Timed out waiting for kubernetes to become available!: {}".format(e.message)
-                        log_debug(msg)
-                        raise RancherServerError(msg) from e
-                return True
+                    raise RancherServerError(msg)
 
         #
         def configure(self):
@@ -419,7 +411,6 @@ class RancherServer(object):
         def k8s_stack(self):
                 try:
                         self.__install_k8s_stack()
-                        self.__wait_for_k8s()
 
                 except RancherServerError as e:
                         msg = "Failed while creating Kubernetes stack \'{}\'!: {}".format(self.__name(), e.message)
