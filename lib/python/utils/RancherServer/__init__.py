@@ -1,8 +1,8 @@
-import os, boto3, json
+import os, boto3
 
-from invoke import Failure
+from invoke import run, Failure
 from requests import ConnectionError, HTTPError
-from time import sleep
+from time import sleep, time
 from boto3.exceptions import Boto3Error
 from botocore.exceptions import ClientError
 
@@ -343,7 +343,7 @@ class RancherServer(object):
             log_info("Installing kubernetes stack...")
             rancher_url = "http://{}:8080/v2-beta/schemas".format(self.IP())
             os.environ['RANCHER_URL'] = rancher_url
-            rancher_version = os.environ['RANCHER_K8S_CATALOG_VERSION']
+            kubernetes_version = os.environ['RANCHER_K8S_CATALOG_VERSION']
 
             actual_count = 0
             timeout = 300
