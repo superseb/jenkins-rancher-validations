@@ -285,7 +285,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
   	      sh "docker run --rm  " +
   		"-v \"\$(pwd)\":/workdir " +
   		"--env-file .env " +
-  		"rancherlabs/ci-validation-tests rancher_agents.k8s_stack"
+  		"rancherlabs/ci-validation-tests rancher_server.k8s_stack"
   	    }
 
         stage ('Run Pre-upgrade Tests') {
