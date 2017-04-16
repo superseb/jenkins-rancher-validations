@@ -365,9 +365,9 @@ class RancherServer(object):
                 "ETCD_HEARTBEAT_INTERVAL=500",
                 "ETCD_ELECTION_TIMEOUT=5000"
             ]
-
+            lines_conc = "\n".join(lines)
             with open(answers_file, 'w') as f:
-                    f.writelines(lines)
+                    f.write(lines_conc)
             stack_health = ""
             result = run('rancher --env Default catalog install library/k8s:{} --answers {} --name kubernetes --system'.format(kubernetes_version, answers_file), echo=True)
             while elapsed_time < timeout and stack_health == "":
