@@ -354,6 +354,7 @@ class RancherServer(object):
             answers_file = 'answers.txt'
 
             lines = [
+                "CONSTRAINT_TYPE=none",
                 "CLOUD_PROVIDER=rancher",
                 "REGISTRY=",
                 "DISABLE_ADDONS=false",
