@@ -222,29 +222,29 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 	  //     "rancherlabs/ci-validation-tests aws.provision"
 	  // }
 
-	  stage('provision rancher/server') {
-	    sh "docker run --rm  " +
-	      "-v \"\$(pwd)\":/workdir " +
-	      "--env-file .env " +
-	      "rancherlabs/ci-validation-tests rancher_server.provision"
-	  }
+	  //stage('provision rancher/server') {
+	    //sh "docker run --rm  " +
+	      //"-v \"\$(pwd)\":/workdir " +
+	      //"--env-file .env " +
+	      //"rancherlabs/ci-validation-tests rancher_server.provision"
+	  //}
 
-	  stage ('configure rancher/server') {
-	    sh "docker run --rm  " +
-	      "-v \"\$(pwd)\":/workdir " +
-	      "--env-file .env " +
-	      "rancherlabs/ci-validation-tests rancher_server.configure"
-	  }
+	  //stage ('configure rancher/server') {
+	    //sh "docker run --rm  " +
+	      //"-v \"\$(pwd)\":/workdir " +
+	      //"--env-file .env " +
+	      //"rancherlabs/ci-validation-tests rancher_server.configure"
+	  //}
 
 	  // this should be a temporary hack until the pipeline re-claims k8s agent
 	  // provisioning from the validation-tests code. Talk to @sangeetha.
 	  if ( 'k8s' != "${RANCHER_ORCHESTRATION}" ) {
-	    stage ('provision Rancher Agents') {
-	      sh "docker run --rm  " +
-		"-v \"\$(pwd)\":/workdir " +
-		"--env-file .env " +
-		"rancherlabs/ci-validation-tests rancher_agents.provision"
-	    }
+	    //stage ('provision Rancher Agents') {
+	      //sh "docker run --rm  " +
+		//"-v \"\$(pwd)\":/workdir " +
+		//"--env-file .env " +
+		//"rancherlabs/ci-validation-tests rancher_agents.provision"
+	    //}
 	  }
 
 	  if ( "false" == "${PIPELINE_PROVISION_STOP}" ) {
@@ -273,12 +273,12 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
   	      step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
   	    }
       } else {
-        stage ('provision Rancher Agents') {
-  	      sh "docker run --rm  " +
-  		"-v \"\$(pwd)\":/workdir " +
-  		"--env-file .env " +
-  		"rancherlabs/ci-validation-tests rancher_agents.provision"
-  	    }
+        //stage ('provision Rancher Agents') {
+  	      //sh "docker run --rm  " +
+  		//"-v \"\$(pwd)\":/workdir " +
+  		//"--env-file .env " +
+  		//"rancherlabs/ci-validation-tests rancher_agents.provision"
+  	    //}
         // To run the upgrade tests on the same environment we have to install k8s
         // on the Default environment..
         stage ('install k8s stack') {
