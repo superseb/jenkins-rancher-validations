@@ -199,19 +199,19 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 	  }
 	}
 
-	stage ('deprovision Rancher Agents') {
-	  sh "docker run --rm  " +
-	    "-v \"\$(pwd)\":/workdir " +
-	    "--env-file .env " +
-	    "rancherlabs/ci-validation-tests rancher_agents.deprovision"
-	}
+	//stage ('deprovision Rancher Agents') {
+	  //sh "docker run --rm  " +
+	    //"-v \"\$(pwd)\":/workdir " +
+	    //"--env-file .env " +
+	    //"rancherlabs/ci-validation-tests rancher_agents.deprovision"
+	//}
 
-	stage ('deprovision rancher/server') {
-	  sh "docker run --rm  " +
-	    "-v \"\$(pwd)\":/workdir " +
-	    "--env-file .env " +
-	    "rancherlabs/ci-validation-tests rancher_server.deprovision"
-	}
+	//stage ('deprovision rancher/server') {
+	  //sh "docker run --rm  " +
+	    //"-v \"\$(pwd)\":/workdir " +
+	    //"--env-file .env " +
+	    //"rancherlabs/ci-validation-tests rancher_server.deprovision"
+	//}
 
 	if ( "false" == "${PIPELINE_DEPROVISION_STOP}" ) {
 
