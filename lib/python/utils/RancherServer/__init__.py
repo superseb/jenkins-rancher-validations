@@ -341,6 +341,7 @@ class RancherServer(object):
         #
         def __install_k8s_stack(self):
             log_info("Installing kubernetes stack...")
+            catalog_url = "http://{}:8080/v1-catalog/templates/library:infra*k8s".format(self.IP())
             rancher_url = "http://{}:8080/v2-beta/schemas".format(self.IP())
             os.environ['RANCHER_URL'] = rancher_url
             kubernetes_version = os.environ['RANCHER_K8S_CATALOG_VERSION']
@@ -351,20 +352,18 @@ class RancherServer(object):
             sleep_step = 30
             start_time = time()
 
+            # Getting answers
+            response = request_with_retries('GET', catalog_url)
+            k8s_url = response.json()['versionLinks'][kubernetes_version]
+
+            response = request_with_retries('GET', k8s_url)
+            questions = response.json()['questions']
+
             answers_file = 'answers.txt'
 
-            lines = [
-                "CONSTRAINT_TYPE=none",
-                "CLOUD_PROVIDER=rancher",
-                "REGISTRY=",
-                "DISABLE_ADDONS=false",
-                "POD_INFRA_CONTAINER_IMAGE=gcr.io/google_containers/pause-amd64\:3.0",
-                "EMBEDDED_BACKUPS=true",
-                "BACKUP_PERIOD=15m0s",
-                "BACKUP_RETENTION=24h",
-                "ETCD_HEARTBEAT_INTERVAL=500",
-                "ETCD_ELECTION_TIMEOUT=5000"
-            ]
+            lines = []
+            for q in questions:
+                lines.append(q['variable']+"="+q['default'])
             lines_conc = "\n".join(lines)
             with open(answers_file, 'w') as f:
                     f.write(lines_conc)
