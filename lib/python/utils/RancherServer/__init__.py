@@ -370,7 +370,7 @@ class RancherServer(object):
             result = run('rancher --env Default catalog install library/k8s:{} --answers {} --name kubernetes --system'.format(kubernetes_version, answers_file), echo=True)
             stack_name = result.stdout.rstrip()
             run('rancher wait {}'.format(stack_name))
-            restult = run('rancher inspect {}'.format(stack_name), echo=True)
+            result = run('rancher inspect {}'.format(stack_name), echo=True)
             stack_state = json.loads(result.stdout.rstrip())['state']
 
             if stack_state != 'active':
