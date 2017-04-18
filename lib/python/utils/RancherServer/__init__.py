@@ -1,4 +1,4 @@
-import os, boto3
+import os, boto3, json
 
 from invoke import run, Failure
 from requests import ConnectionError, HTTPError
@@ -367,25 +367,13 @@ class RancherServer(object):
             lines_conc = "\n".join(lines)
             with open(answers_file, 'w') as f:
                     f.write(lines_conc)
-            stack_health = ""
             result = run('rancher --env Default catalog install library/k8s:{} --answers {} --name kubernetes --system'.format(kubernetes_version, answers_file), echo=True)
-            while elapsed_time < timeout and stack_health == "":
-                    try:
-                            sleep(sleep_step)
+            stack_name = result.stdout.rstrip()
+            run('rancher wait {}'.format(stack_name))
+            restult = run('rancher inspect {}'.format(stack_name), echo=True)
+            stack_state = json.loads(result.stdout.rstrip())['state']
 
-                            stack_name = result.stdout.rstrip()
-                            elapsed_time = time() - start_time
-                            log_info("{} seconds elapsed waiting for kubernetes stack...".format(elapsed_time))
-                            stack_health = run('rancher --env Default stack ls -s --format "json" | jq .ID,.State  | grep {} -A1 | grep -o healthy'.format(stack_name), echo=True)
-                            stack_health = stack_health.stdout.rstrip()
-
-                    except Failure as e:
-                            msg = "Failed while trying to install kubernetes stack!: {}".format(str(e))
-                            log_debug(msg)
-                            raise RancherServerError(msg) from e
-
-            restult = run('rancher --env Default stack ls -s --format "json" | jq .ID,.State  | grep {} -A1 | grep -o healthy'.format(stack_name), echo=True)
-            if result.stdout.rstrip() != 'healthy':
+            if result.stdout.rstrip() != 'active':
                     msg = "Kubernetes still not in healthy state"
                     log_debug(msg)
                     raise RancherServerError(msg)
