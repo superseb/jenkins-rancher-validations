@@ -9,7 +9,9 @@ set -uxe
 # Upgrade Rancher server to specific version
 ################################################################################
 upgrade_rancher_container() {
-
+    export RANCHER_VERSION=$1
+    export RANCHER_NEW_VERSION=$2
+    echo "Upgrading from version $RANCHER_VERSION to version $RANCHER_NEW_VERSION"
     cont_no=$(sudo docker ps -qa | wc -l)
     if [ ${cont_no} -gt 1 ]; then
       echo 'More than one container exist on Rancher server.. exiting'
@@ -35,8 +37,8 @@ upgrade_rancher_container() {
 # the main() function
 ###############################################################################
 main() {
-	upgrade_rancher_container
+	upgrade_rancher_container "$@"
 }
 
 # the fun starts here
-main
+main "$@"

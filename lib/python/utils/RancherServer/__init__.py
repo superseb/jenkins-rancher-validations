@@ -194,7 +194,7 @@ class RancherServer(object):
                 log_info('upgrading rancher/server from version:{} to version:{}...'.format(rancher_version, rancher_new_version))
 
                 try:
-                         SSH(self.name(), self.IP(), os_settings['ssh_username'], '/tmp/rancher_upgrade.sh')
+                         SSH(self.name(), self.IP(), os_settings['ssh_username'], '/tmp/rancher_upgrade.sh {} {}'.format(rancher_version, rancher_new_version))
 
                 except SSHError as e:
                          msg = "Failed while upgrading rancher/server container!: {}".format(str(e))
