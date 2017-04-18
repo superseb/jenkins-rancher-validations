@@ -363,7 +363,7 @@ class RancherServer(object):
 
             lines = []
             for q in questions:
-                lines.append(q['variable']+"="+q['default'])
+                lines.append(q['variable'] + "=" + q['default'])
             lines_conc = "\n".join(lines)
             with open(answers_file, 'w') as f:
                     f.write(lines_conc)
