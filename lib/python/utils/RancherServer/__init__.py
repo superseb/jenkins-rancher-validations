@@ -373,7 +373,7 @@ class RancherServer(object):
             restult = run('rancher inspect {}'.format(stack_name), echo=True)
             stack_state = json.loads(result.stdout.rstrip())['state']
 
-            if result.stdout.rstrip() != 'active':
+            if stack_state != 'active':
                     msg = "Kubernetes still not in healthy state"
                     log_debug(msg)
                     raise RancherServerError(msg)
