@@ -350,7 +350,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
           "PRE_PORT_EXT=${k8s_pre_upgrade_portext()}",
           "POST_UPGRADE_NAMESPACE=${k8s_post_upgrade_namespace()}",
           "POST_PORT_EXT=${k8s_post_upgrade_portext()}"]) {
-    sh "git clone https://github.com/rancher/validation-tests"
+
     try {
     def cmd = post_upgrade_tests_cmd()
     sh "${cmd}"
