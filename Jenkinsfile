@@ -380,7 +380,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
           "PRE_PORT_SUFFIX_NUM=${cattle_pre_port_suffix_name()}"]) {
     sh "git clone https://github.com/rancher/validation-tests"
     try {
-    def cmd = pre_cattle_upgrade_tests_cmd()
+    def cmd = pre_upgrade_tests_cmd()
     sh "${cmd}"
     } catch(err) {
       echo 'Test run had failures. Collecting results...'
