@@ -168,6 +168,11 @@ def cattle_secret_key() {
   catch (MissingPropertyException e) { return '' }
 }
 
+def rancher_server_ip() {
+  try { if ('' != RANCHER_SERVER_IP) { return RANCHER_SERVER_IP } }
+  catch (MissingPropertyException e) { return '' }
+}
+
 // compute the appropriate pre upgrade test command if the user has not specifically supplied one
 def pre_upgrade_tests_cmd() {
   if ( "k8s" == "${RANCHER_ORCHESTRATION}" ) {
@@ -388,7 +393,12 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
     } else if ( "true" == "${CATTLE_UPGRADE_TESTING}" ){
       stage ('Run Cattle Pre-upgrade Tests') {
 
-        CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
+        if ( rancher_server_ip() == "" ) {
+          CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
+        } else {
+          CATTLE_TEST_URL = "http://" + ${RANCHER_SERVER_IP} + ":8080"
+        }
+
 
         withEnv([
           "CATTLE_TEST_URL=${CATTLE_TEST_URL}",
