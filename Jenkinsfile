@@ -156,6 +156,18 @@ def cattle_post_port_suffix_name() {
   catch (MissingPropertyException e) { return '9' }
 }
 
+// access key for cattle validation tests
+def cattle_access_key() {
+  try { if ('' != ACCESS_KEY) { return ACCESS_KEY } }
+  catch (MissingPropertyException e) { return '' }
+}
+
+// secret key for cattle validation tests
+def cattle_secret_key() {
+  try { if ('' != SECRET_KEY) { return SECRET_KEY } }
+  catch (MissingPropertyException e) { return '' }
+}
+
 // compute the appropriate pre upgrade test command if the user has not specifically supplied one
 def pre_upgrade_tests_cmd() {
   if ( "k8s" == "${RANCHER_ORCHESTRATION}" ) {
@@ -176,6 +188,11 @@ def post_upgrade_tests_cmd() {
     // Waiting for cattle upgrade PR
     return "py.test -s --junit-xml=results.xml -k 'test_post_upgrade' validation-tests/tests/v2_validation/cattlevalidationtest/core/test_cattle_upgrade.py"
   }
+}
+
+// compute the appropriate upgrade test command if the user has not specifically supplied one
+def upgrade_test_cmd() {
+    return "validation-tests/tests/validation_v2/upgrade/upgrade_rancher_server.py -t \$RANCHER_NEW_VERSION -s \$RANCHER_SERVER_IP -u \$RANCHER_UPGRADE_USERNAME"
 }
 
 // compute the appropriate validation tests command if the user has not specifically supplied one
@@ -269,29 +286,29 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 	  //     "rancherlabs/ci-validation-tests aws.provision"
 	  // }
 
-	  stage('provision rancher/server') {
-	    sh "docker run --rm  " +
-	      "-v \"\$(pwd)\":/workdir " +
-	      "--env-file .env " +
-	      "rancherlabs/ci-validation-tests rancher_server.provision"
-	  }
+	  //stage('provision rancher/server') {
+	    //sh "docker run --rm  " +
+	      //"-v \"\$(pwd)\":/workdir " +
+	      //"--env-file .env " +
+	      //"rancherlabs/ci-validation-tests rancher_server.provision"
+	  //}
 
-	  stage ('configure rancher/server') {
-	    sh "docker run --rm  " +
-	      "-v \"\$(pwd)\":/workdir " +
-	      "--env-file .env " +
-	      "rancherlabs/ci-validation-tests rancher_server.configure"
-	  }
+	  //stage ('configure rancher/server') {
+	    //sh "docker run --rm  " +
+	      //"-v \"\$(pwd)\":/workdir " +
+	      //"--env-file .env " +
+	      //"rancherlabs/ci-validation-tests rancher_server.configure"
+	  //}
 
 	  // this should be a temporary hack until the pipeline re-claims k8s agent
 	  // provisioning from the validation-tests code. Talk to @sangeetha.
 	  if ( 'k8s' != "${RANCHER_ORCHESTRATION}" ) {
-	    stage ('provision Rancher Agents') {
-	      sh "docker run --rm  " +
-		"-v \"\$(pwd)\":/workdir " +
-		"--env-file .env " +
-		"rancherlabs/ci-validation-tests rancher_agents.provision"
-	    }
+	    //stage ('provision Rancher Agents') {
+	      //sh "docker run --rm  " +
+		//"-v \"\$(pwd)\":/workdir " +
+		//"--env-file .env " +
+		//"rancherlabs/ci-validation-tests rancher_agents.provision"
+	    //}
 	  }
 
 	  if ( "false" == "${PIPELINE_PROVISION_STOP}" ) {
@@ -376,6 +393,8 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
         withEnv([
           "CATTLE_TEST_URL=${CATTLE_TEST_URL}",
           "UPRGADE_TESTING=true",
+          "ACCESS_KEY=${cattle_access_key()}",
+          "SECRET_KEY=${cattle_secret_key()}",
           "PRE_UPGRADE_STACK_NAME=${cattle_pre_upgrade_stackname()}",
           "PRE_PORT_SUFFIX_NUM=${cattle_pre_port_suffix_name()}"]) {
     sh "git clone https://github.com/rancher/validation-tests"
@@ -390,10 +409,10 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
         step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
       }
       stage ('Upgrade Rancher Server') {
-        sh "docker run --rm  " +
-          "-v \"\$(pwd)\":/workdir " +
-          "--env-file .env " +
-          "rancherlabs/ci-validation-tests rancher_server.upgrade"
+        sh "git clone https://github.com/rancher/validation-tests"
+        echo "Run upgrade testing tool"
+        def cmd = upgrade_test_cmd()
+        sh "${cmd}"
       }
 
       stage ('run post-upgrade tests Phase-1') {
@@ -403,6 +422,8 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
         withEnv([
           "CATTLE_TEST_URL=${CATTLE_TEST_URL}",
           "UPRGADE_TESTING=true",
+          "ACCESS_KEY=${cattle_access_key()}",
+          "SECRET_KEY=${cattle_secret_key()}",
           "PRE_UPGRADE_STACK_NAME=${cattle_pre_upgrade_stackname()}",
           "PRE_PORT_SUFFIX_NUM=${cattle_pre_port_suffix_name()}",
           "POST_UPGRADE_STACK_NAME=${cattle_post_upgrade_stackname()}",
