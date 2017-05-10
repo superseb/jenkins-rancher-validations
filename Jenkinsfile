@@ -396,7 +396,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
         if ( rancher_server_ip() == "" ) {
           CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
         } else {
-          CATTLE_TEST_URL = "http://" + ${RANCHER_SERVER_IP} + ":8080"
+          CATTLE_TEST_URL = "http://" + rancher_server_ip() + ":8080"
         }
 
 
