@@ -419,7 +419,6 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
         step([$class: 'JUnitResultArchiver', testResults: '**/results.xml'])
       }
       stage ('Upgrade Rancher Server') {
-        sh "git clone https://github.com/rancher/validation-tests"
         echo "Run upgrade testing tool"
         def cmd = upgrade_test_cmd()
         sh "${cmd}"
@@ -427,7 +426,11 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 
       stage ('run post-upgrade tests Phase-1') {
 
-        CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
+        if ( rancher_server_ip() == "" ) {
+          CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
+        } else {
+          CATTLE_TEST_URL = "http://" + rancher_server_ip() + ":8080"
+        }
 
         withEnv([
           "CATTLE_TEST_URL=${CATTLE_TEST_URL}",
