@@ -1,4 +1,4 @@
-FROM python:3
+FROM python:3.5
 MAINTAINER Nathan Valentine <nathan@rancher.com|nrvale0@gmail.com>
 
 ARG OPTDIR=/opt/nrvale0
