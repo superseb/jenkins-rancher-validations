@@ -232,10 +232,10 @@ class RancherServer(object):
 #                               self.__docker_install()
 
                         self.__install_server_container()
-
-                        cattle_test_url_filename = 'cattle_test_url'
+                        pwd = os.getcwd()
+                        cattle_test_url_filename = pwd + '/cattle_test_url'
                         if os.environ.get('BUILD_NUMBER'):
-                                cattle_test_url_filename = "cattle_test_url.{}".format(os.environ.get('BUILD_NUMBER'))
+                                cattle_test_url_filename = "{}/cattle_test_url.{}".format(pwd, os.environ.get('BUILD_NUMBER'))
                                 log_debug("Found BUILD_NUMBER so CATTLE_TEST_URL set in '{}'...".format(cattle_test_url_filename))
                         else:
                                 log_debug("Did not find BUILD_NUMBER so CATTLE_TEST_URL is set in default of 'cattle_test_url'...")
