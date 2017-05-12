@@ -232,16 +232,18 @@ class RancherServer(object):
 #                               self.__docker_install()
 
                         self.__install_server_container()
-
-                        cattle_test_url_filename = 'cattle_test_url'
+                        pwd = str(os.environ['WORKSPACE_DIR']).rstrip()
+                        cattle_test_url_filename = pwd + '/cattle_test_url'
+                        log_debug("Current working directory: {}".format(pwd))
                         if os.environ.get('BUILD_NUMBER'):
-                                cattle_test_url_filename = "cattle_test_url.{}".format(os.environ.get('BUILD_NUMBER'))
+                                cattle_test_url_filename = "{}/cattle_test_url.{}".format(pwd, os.environ.get('BUILD_NUMBER'))
                                 log_debug("Found BUILD_NUMBER so CATTLE_TEST_URL set in '{}'...".format(cattle_test_url_filename))
                         else:
                                 log_debug("Did not find BUILD_NUMBER so CATTLE_TEST_URL is set in default of 'cattle_test_url'...")
 
-                        with open(cattle_test_url_filename, 'w') as f:
+                        with open(cattle_test_url_filename, 'w+') as f:
                                 f.write("http://{}:8080".format(self.IP()))
+                                f.close()
 
                         public_ip = ec2_node_public_ip(self.name())
                         log_info("Rancher Server will be available at 'http://{}:8080' shortly...".format(public_ip))

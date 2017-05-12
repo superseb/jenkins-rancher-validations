@@ -64,4 +64,4 @@ RUN (cd "${WORKDIR}" && \
 
 ADD Dockerfile /opt/nrvale0
 WORKDIR "${WORKDIR}"
-ENTRYPOINT ["invoke"]
+#ENTRYPOINT ["invoke"]
