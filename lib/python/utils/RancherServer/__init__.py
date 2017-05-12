@@ -240,8 +240,9 @@ class RancherServer(object):
                         else:
                                 log_debug("Did not find BUILD_NUMBER so CATTLE_TEST_URL is set in default of 'cattle_test_url'...")
 
-                        with open(cattle_test_url_filename, 'w') as f:
+                        with open(cattle_test_url_filename, 'w+') as f:
                                 f.write("http://{}:8080".format(self.IP()))
+                                f.close()
 
                         public_ip = ec2_node_public_ip(self.name())
                         log_info("Rancher Server will be available at 'http://{}:8080' shortly...".format(public_ip))
