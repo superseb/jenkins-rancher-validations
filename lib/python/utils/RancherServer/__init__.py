@@ -232,7 +232,7 @@ class RancherServer(object):
 #                               self.__docker_install()
 
                         self.__install_server_container()
-                        pwd = os.getcwd()
+                        pwd = str(os.environ['WORKSPACE_DIR']).rstrip()
                         cattle_test_url_filename = pwd + '/cattle_test_url'
                         log_debug("Current working directory: {}".format(pwd))
                         if os.environ.get('BUILD_NUMBER'):
