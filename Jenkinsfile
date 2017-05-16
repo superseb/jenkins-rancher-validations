@@ -108,6 +108,14 @@ def k8s_deploy() {
   catch (MissingPropertyException e) {}
 }
 
+// valiudation tests code needs KUBECTL_VERSION if RANCHER_ORCHESTRATION=k8s
+def kubectl_version() {
+  try {
+    if ('k8s' == RANCHER_ORCHESTRATION) { return KUBECTL_VERSION }
+    else { return '' }
+  }
+  catch (MissingPropertyException e) {}
+}
 
 // compute the appropriate validation tests command if the user has not specifically supplied one
 def validation_tests_cmd() {
@@ -205,7 +213,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 	      "-v jenkins_home:/var/jenkins_home " +
 	      "--env-file .env " +
         "-e WORKSPACE_DIR=\"\$(pwd)\" " +
-        "rancherlabs/ci-validation-tests /bin/bash -c \'cd \"\$(pwd)\" && invoke rancher_server.provision\'"
+        "rancherlabs/ci-validation-tests /bin/bash -c \'cd \"\$(pwd)\" && invoke _vision\'"
 	  }
 
 	  stage ('configure rancher/server') {
@@ -239,7 +247,9 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 
 	      CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
 
-	      withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}", "K8S_DEPLOY=${k8s_deploy()}"]) {
+	      withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}",
+                 "K8S_DEPLOY=${k8s_deploy()}",
+                 "KUBECTL_VERSION=${kubectl_version()}"]) {
 		sh "git clone https://github.com/rancher/validation-tests"
 		try {
 		def cmd = validation_tests_cmd()
