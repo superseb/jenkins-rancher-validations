@@ -240,7 +240,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 	      CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
 
 	      withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}", "K8S_DEPLOY=${k8s_deploy()}"]) {
-		sh "git clone https://github.com/rancher/validation-tests"
+		sh "git clone -b removeadminclient https://github.com/sangeethah/validation-tests"
 		try {
 		def cmd = validation_tests_cmd()
 		sh "${cmd}"
