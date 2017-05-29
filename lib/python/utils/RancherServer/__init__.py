@@ -37,8 +37,7 @@ class RancherServer(object):
                                     'RANCHER_VERSION',
                                     'RANCHER_DOCKER_VERSION',
                                     'RANCHER_ORCHESTRATION',
-                                    'RANCHER_SERVER_AWS_INSTANCE_TYPE',
-                                    'RANCHER_DOCKER_VERSION']
+                                    'RANCHER_SERVER_AWS_INSTANCE_TYPE']
 
                 result = True
                 missing = []

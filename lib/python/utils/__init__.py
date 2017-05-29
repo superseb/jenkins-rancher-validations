@@ -19,8 +19,10 @@ def ec2_compute_tags(nodename):
     # in addition to AWS_TAGS, include a tag for Docker version which will be
     # referenced by later provisining scripts.
     docker_version = str(os.environ['RANCHER_DOCKER_VERSION']).rstrip()
+    docker_distro = str(os.environ.get('RANCHER_DOCKER_DISTRO', 'false')).rstrip()
     tags = str(os.environ['AWS_TAGS']).rstrip()
     tags += ',rancher.docker.version,{}'.format(docker_version)
+    tags += ',rancher.docker.distro,{}'.format(docker_distro)
     tags += ',Name,{}'.format(nodename)
     return tag_csv_to_array(tags)
 
