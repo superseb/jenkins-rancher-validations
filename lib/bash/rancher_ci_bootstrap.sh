@@ -106,12 +106,12 @@ docker_lvm_thinpool_config() {
 
     wget -O - "https://releases.rancher.com/install-docker/${docker_version}.sh" | sudo bash -
 
-    tee /etc/sysconfig/docker-storage <<-EOF
+    sudo tee /etc/sysconfig/docker-storage <<-EOF
 DOCKER_STORAGE_OPTIONS=--storage-driver=devicemapper --storage-opt=dm.thinpooldev=/dev/mapper/docker-thinpool --storage-opt dm.use_deferred_removal=true
 EOF
 
-    systemctl daemon-reload
-    systemctl restart docker
+    sudo systemctl daemon-reload
+    sudo systemctl restart docker
 
 }
 
