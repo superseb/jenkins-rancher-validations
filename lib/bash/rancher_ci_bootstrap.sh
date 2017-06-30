@@ -81,23 +81,6 @@ ec2_tag_get_docker_version() {
 
 
 ###############################################################################
-# add RHEL Docker yum config
-###############################################################################
-docker_repo_yum_create() {
-    sudo tee /etc/yum.repos.d/docker.repo <<-EOF
-[dockerrepo]
-name=Docker Repository
-baseurl=https://yum.dockerproject.org/repo/main/centos/7/
-enabled=1
-gpgcheck=1
-gpgkey=https://yum.dockerproject.org/gpg
-EOF
-    sudo yum clean all -y
-    sudo yum makecache
-}
-
-
-###############################################################################
 # Docker volume LVM adjustments done the right way. :\
 ###############################################################################
 docker_lvm_thinpool_config() {
