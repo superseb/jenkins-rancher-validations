@@ -119,7 +119,7 @@ EOF
  ]
 }
 EOF
-    rm -rf /var/lib/docker
+    sudo rm -rf /var/lib/docker
     sudo systemctl daemon-reload
     sudo systemctl restart docker
 
