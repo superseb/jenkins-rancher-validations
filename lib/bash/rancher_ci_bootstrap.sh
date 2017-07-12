@@ -81,6 +81,29 @@ ec2_tag_get_docker_version() {
 
 
 ###############################################################################
+# get the preferred Docker type from EC2 tag
+###############################################################################
+ec2_tag_get_docker_native() {
+    local instance_id
+    local region
+    local docker_native
+
+    instance_id="$(aws_instance_id)" || exit $?
+    region="$(aws_region)" || exit $?
+
+    docker_native="$(aws ec2 --region "${region}" describe-tags --filter Name=resource-id,Values="${instance_id}" --out=json | \
+			   jq '.Tags[]| select(.Key == "rancher.docker.native")|.Value' | \
+			   sed -e 's/\"//g')" || exit $?
+
+    if [ -z "${docker_native}" ]; then
+	echo 'Failed to query rancher.docker.native from instance tags.'
+	exit 1
+    fi
+    echo "${docker_native}"
+}
+
+
+###############################################################################
 # Docker volume LVM adjustments done the right way. :\
 ###############################################################################
 docker_lvm_thinpool_config() {
@@ -90,7 +113,7 @@ docker_lvm_thinpool_config() {
     wget -O - "https://releases.rancher.com/install-docker/${docker_version}.sh" | sudo bash -
 
     sudo systemctl stop docker
-    
+
     sudo tee /etc/sysconfig/docker-storage <<-EOF
 DOCKER_STORAGE_OPTIONS=--storage-driver=devicemapper --storage-opt=dm.thinpooldev=/dev/mapper/docker-thinpool --storage-opt dm.use_deferred_removal=true
 EOF
@@ -111,6 +134,58 @@ EOF
 
 }
 
+
+###############################################################################
+# Docker Installation for Native Docker
+###############################################################################
+docker_lvm_thinpool_config_native() {
+    local docker_version
+    docker_version="$(ec2_tag_get_docker_version)" || exit $?
+
+    sudo yum-config-manager --enable rhui-REGION-rhel-server-extras
+    docker_version_match=$(yum --showduplicates list docker | grep ${docker_version} | sort -rn | head -n1 | awk -F' ' '{print $2}' | cut -d":" -f2)
+    sudo yum install -y docker-$docker_version_match
+    sudo systemctl start docker
+
+    # Set up SeLinux
+    docker_selinux()
+
+    sudo tee /etc/sysconfig/docker-storage <<-EOF
+DOCKER_STORAGE_OPTIONS=--storage-driver=devicemapper --storage-opt=dm.thinpooldev=/dev/mapper/docker-thinpool --storage-opt dm.use_deferred_removal=true
+EOF
+    sudo mkdir -p /etc/docker
+    sudo tee /etc/docker/daemon.json <<-EOF
+{
+"storage-driver": "devicemapper",
+"storage-opts": [
+   "dm.thinpooldev=/dev/mapper/docker-thinpool",
+   "dm.use_deferred_removal=true",
+   "dm.use_deferred_deletion=true"
+ ]
+}
+EOF
+    sudo rm -rf /var/lib/docker
+    sudo systemctl daemon-reload
+    sudo systemctl restart docker
+}
+
+
+###############################################################################
+# Docker SeLinux Configuration
+###############################################################################
+docker_selinux() {
+    sudo yum install -y selinux-policy-devel
+    sudo tee virtpatch.te <<-EOF
+policy_module(virtpatch, 1.0)
+gen_require(`
+  type svirt_lxc_net_t;
+')
+allow svirt_lxc_net_t self:netlink_xfrm_socket create_netlink_socket_perms;
+EOF
+    sudo make -f /usr/share/selinux/devel/Makefile
+    sudo semodule -i virtpatch.pp
+    sudo systemctl restart docker
+}
 
 ################################################################################
 # install specified Docker version
@@ -228,7 +303,12 @@ main() {
     if [ 'redhat' == "${osfamily}" ]; then
 	echo 'Performing special RHEL osfamily storage config...'
 	redhat_config
-	docker_lvm_thinpool_config
+  use_native_docker="$(ec2_tag_get_docker_native)" || exit $?
+  if [ ${use_native_docker} == "true" ]; then
+    docker_lvm_thinpool_config_native
+  else
+    docker_lvm_thinpool_config
+  fi
 
     elif [ 'debian' == "${osfamily}" ]; then
 	docker_install_tag_version
