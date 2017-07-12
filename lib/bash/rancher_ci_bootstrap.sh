@@ -183,7 +183,8 @@ docker_selinux() {
 
     sudo make -f /usr/share/selinux/devel/Makefile
     sudo semodule -i virtpatch.pp
-    sudo systemctl restart docker
+    sudo systemctl stop docker
+    sleep 10
 }
 
 ################################################################################
