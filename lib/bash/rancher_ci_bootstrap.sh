@@ -148,7 +148,7 @@ docker_lvm_thinpool_config_native() {
     sudo systemctl start docker
 
     # Set up SeLinux
-    # docker_selinux()
+    docker_selinux
 
     sudo tee /etc/sysconfig/docker-storage <<-EOF
 DOCKER_STORAGE_OPTIONS=--storage-driver=devicemapper --storage-opt=dm.thinpooldev=/dev/mapper/docker-thinpool --storage-opt dm.use_deferred_removal=true
