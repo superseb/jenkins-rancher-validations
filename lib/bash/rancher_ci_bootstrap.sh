@@ -69,7 +69,7 @@ ec2_get_tag() {
     region="$(aws_region)" || exit $?
 
     ec2_tag="$(aws ec2 --region "${region}" describe-tags --filter Name=resource-id,Values="${instance_id}" --out=json | \
-			   jq ".Tags[]| select(.Key == "$1")|.Value" | \
+			   jq ".Tags[]| select(.Key == \"$1\")|.Value" | \
 			   sed -e 's/\"//g')" || exit $?
 
     if [ -z "${ec2_tag}" ]; then
