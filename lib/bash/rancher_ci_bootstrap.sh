@@ -69,7 +69,7 @@ ec2_get_tag() {
     region="$(aws_region)" || exit $?
 
     ec2_tag="$(aws ec2 --region "${region}" describe-tags --filter Name=resource-id,Values="${instance_id}" --out=json | \
-			   jq '.Tags[]| select(.Key == "$1")|.Value' | \
+			   jq ".Tags[]| select(.Key == "$1")|.Value" | \
 			   sed -e 's/\"//g')" || exit $?
 
     if [ -z "${ec2_tag}" ]; then
@@ -153,6 +153,11 @@ docker_selinux() {
 
     sudo make -f /usr/share/selinux/devel/Makefile
     sudo semodule -i virtpatch.pp
+    count=$(semodule -l | grep virtpatch | wc -l)
+    if [ $count -eq 0 ]; then
+      echo "SeLinux module is not loaded properly"
+      exit 1
+    fi
     sudo systemctl stop docker
     sleep 10
 }
