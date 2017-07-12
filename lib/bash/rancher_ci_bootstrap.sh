@@ -153,7 +153,7 @@ docker_selinux() {
 
     sudo make -f /usr/share/selinux/devel/Makefile
     sudo semodule -i virtpatch.pp
-    count=$(semodule -l | grep virtpatch | wc -l)
+    count=$(sudo semodule -l | grep virtpatch | wc -l)
     if [ $count -eq 0 ]; then
       echo "SeLinux module is not loaded properly"
       exit 1
