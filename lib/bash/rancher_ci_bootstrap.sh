@@ -175,13 +175,12 @@ EOF
 ###############################################################################
 docker_selinux() {
     sudo yum install -y selinux-policy-devel
-    sudo tee virtpatch.te <<-EOF
-policy_module(virtpatch, 1.0)
-gen_require(`
-  type svirt_lxc_net_t;
-')
-allow svirt_lxc_net_t self:netlink_xfrm_socket create_netlink_socket_perms;
-EOF
+    sudo echo 'policy_module(virtpatch, 1.0)' >> virtpatch.te
+    sudo echo 'gen_require(`' >> virtpatch.te
+    sudo echo 'type svirt_lxc_net_t;' >> virtpatch.te
+    sudo echo "')" >> virtpatch.te
+    sudo echo "allow svirt_lxc_net_t self:netlink_xfrm_socket create_netlink_socket_perms;" >> virtpatch.te
+
     sudo make -f /usr/share/selinux/devel/Makefile
     sudo semodule -i virtpatch.pp
     sudo systemctl restart docker
