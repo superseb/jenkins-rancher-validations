@@ -60,23 +60,23 @@ aws_instance_id() {
 ###############################################################################
 # get the preferred Docker version from EC2 tag
 ###############################################################################
-ec2_tag_get_docker_version() {
+ec2_get_tag() {
     local instance_id
     local region
-    local docker_version
+    local ec2_tag
 
     instance_id="$(aws_instance_id)" || exit $?
     region="$(aws_region)" || exit $?
 
-    docker_version="$(aws ec2 --region "${region}" describe-tags --filter Name=resource-id,Values="${instance_id}" --out=json | \
-			   jq '.Tags[]| select(.Key == "rancher.docker.version")|.Value' | \
+    ec2_tag="$(aws ec2 --region "${region}" describe-tags --filter Name=resource-id,Values="${instance_id}" --out=json | \
+			   jq ".Tags[]| select(.Key == \"$1\")|.Value" | \
 			   sed -e 's/\"//g')" || exit $?
 
-    if [ -z "${docker_version}" ]; then
-	echo 'Failed to query rancher.docker.version from instance tags.'
+    if [ -z "${ec2_tag}" ]; then
+	echo 'Failed to query ec2 tag from instance tags.'
 	exit 1
     fi
-    echo "${docker_version}"
+    echo "${ec2_tag}"
 }
 
 
@@ -85,12 +85,12 @@ ec2_tag_get_docker_version() {
 ###############################################################################
 docker_lvm_thinpool_config() {
     local docker_version
-    docker_version="$(ec2_tag_get_docker_version)" || exit $?
+    docker_version="$(ec2_get_tag rancher.docker.version)" || exit $?
 
     wget -O - "https://releases.rancher.com/install-docker/${docker_version}.sh" | sudo bash -
 
     sudo systemctl stop docker
-    
+
     sudo tee /etc/sysconfig/docker-storage <<-EOF
 DOCKER_STORAGE_OPTIONS=--storage-driver=devicemapper --storage-opt=dm.thinpooldev=/dev/mapper/docker-thinpool --storage-opt dm.use_deferred_removal=true
 EOF
@@ -112,13 +112,63 @@ EOF
 }
 
 
+###############################################################################
+# Docker Installation for Native Docker
+###############################################################################
+docker_lvm_thinpool_config_native() {
+    local docker_version
+    docker_version="$(ec2_get_tag rancher.docker.version)" || exit $?
+    rhel_selinux="$(ec2_get_tag rancher.docker.rhel.selinux)" || exit $?
+    sudo yum-config-manager --enable rhui-REGION-rhel-server-extras
+    docker_version_match=$(sudo yum --showduplicates list docker | grep ${docker_version} | sort -rn | head -n1 | awk -F' ' '{print $2}' | cut -d":" -f2)
+    sudo yum install -y docker-$docker_version_match
+    sudo systemctl start docker
+
+    # Set up SeLinux
+    if [ ${rhel_selinux} == "true" ]; then
+      docker_selinux
+    else
+      sudo setenforce 0
+    fi
+
+    sudo tee /etc/sysconfig/docker-storage <<-EOF
+DOCKER_STORAGE_OPTIONS=--storage-driver=devicemapper --storage-opt=dm.thinpooldev=/dev/mapper/docker-thinpool --storage-opt dm.use_deferred_removal=true
+EOF
+    sudo rm -rf /var/lib/docker
+    sudo systemctl daemon-reload
+    sudo systemctl restart docker
+}
+
+
+###############################################################################
+# Docker SeLinux Configuration
+###############################################################################
+docker_selinux() {
+    sudo yum install -y selinux-policy-devel
+    sudo echo 'policy_module(virtpatch, 1.0)' >> virtpatch.te
+    sudo echo 'gen_require(`' >> virtpatch.te
+    sudo echo 'type svirt_lxc_net_t;' >> virtpatch.te
+    sudo echo "')" >> virtpatch.te
+    sudo echo "allow svirt_lxc_net_t self:netlink_xfrm_socket create_netlink_socket_perms;" >> virtpatch.te
+
+    sudo make -f /usr/share/selinux/devel/Makefile
+    sudo semodule -i virtpatch.pp
+    count=$(sudo semodule -l | grep virtpatch | wc -l)
+    if [ $count -eq 0 ]; then
+      echo "SeLinux module is not loaded properly"
+      exit 1
+    fi
+    sudo systemctl stop docker
+    sleep 10
+}
+
 ################################################################################
 # install specified Docker version
 ################################################################################
 docker_install_tag_version() {
     local docker_version
 
-    docker_version="$(ec2_tag_get_docker_version)" || exit $?
+    docker_version="$(ec2_get_tag rancher.docker.version)" || exit $?
     wget -O - "https://releases.rancher.com/install-docker/${docker_version}.sh" | sudo bash -
     sudo puppet resource service docker ensure=stopped
     sudo puppet resource service docker ensure=running
@@ -228,7 +278,12 @@ main() {
     if [ 'redhat' == "${osfamily}" ]; then
 	echo 'Performing special RHEL osfamily storage config...'
 	redhat_config
-	docker_lvm_thinpool_config
+  use_native_docker="$(ec2_get_tag rancher.docker.native)" || exit $?
+  if [ ${use_native_docker} == "true" ]; then
+    docker_lvm_thinpool_config_native
+  else
+    docker_lvm_thinpool_config
+  fi
 
     elif [ 'debian' == "${osfamily}" ]; then
 	docker_install_tag_version
