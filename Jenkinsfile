@@ -141,7 +141,7 @@ def cattle_test_url_filename() {
 def rancher_version = rancher_version()
 def String rancher_version_regex = "^v[\\d]\\.[\\d]\\.[\\d][\\-a-z\\d]+\$"
 
-if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
+if ( true == via_webhook() ) {
   println("Received RANCHER_VERSION \'${rancher_version}\' via webhook which does not match regex \'${rancher_version_regex}\'.")
   println("** This will **not** result in a pipeline run.")
   currentBuild.result = lastBuildResult()
