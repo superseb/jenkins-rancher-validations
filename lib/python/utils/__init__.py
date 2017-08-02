@@ -241,7 +241,7 @@ def os_to_settings(os):
         ssh_username = 'ec2-user'
 
     elif 'rancheros-v07' in os:
-        ami = 'ami-2c13934c'
+        ami = 'ami-bed0c7c7'
         ssh_username = 'rancher'
 
     elif 'coreos-stable' in os:

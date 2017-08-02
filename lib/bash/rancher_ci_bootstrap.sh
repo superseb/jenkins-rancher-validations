@@ -197,7 +197,7 @@ system_prep() {
 	    sudo yum install -y wget
             sudo wget -O /etc/yum.repos.d/epel.repo https://mirror.openshift.com/mirror/epel/epel7.repo
 	    sudo yum install -y deltarpm
-	    sudo yum upgrade -y
+	    # sudo yum upgrade -y
 
 	    # if this worked we could have inspec. :\
 	    #	    sudo yum-config-manager --enable rhui-REGION-rhel-server-extras
