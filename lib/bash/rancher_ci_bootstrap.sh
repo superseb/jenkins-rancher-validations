@@ -90,7 +90,7 @@ docker_lvm_thinpool_config() {
     wget -O - "https://releases.rancher.com/install-docker/${docker_version}.sh" | sudo bash -
 
     sudo systemctl stop docker
-    
+
     sudo tee /etc/sysconfig/docker-storage <<-EOF
 DOCKER_STORAGE_OPTIONS=--storage-driver=devicemapper --storage-opt=dm.thinpooldev=/dev/mapper/docker-thinpool --storage-opt dm.use_deferred_removal=true
 EOF
@@ -147,7 +147,7 @@ system_prep() {
 	    sudo yum install -y wget
             sudo wget -O /etc/yum.repos.d/epel.repo https://mirror.openshift.com/mirror/epel/epel7.repo
 	    sudo yum install -y deltarpm
-	    sudo yum upgrade -y
+	    # sudo yum upgrade -y
 
 	    # if this worked we could have inspec. :\
 	    #	    sudo yum-config-manager --enable rhui-REGION-rhel-server-extras
