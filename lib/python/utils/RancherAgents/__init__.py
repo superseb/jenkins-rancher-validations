@@ -76,6 +76,7 @@ class RancherAgents(object):
         def __wait_on_active_agents(self, count):
                 rancher_url = "http://{}:8080/v2-beta/schemas".format(RancherServer().IP())
                 os.environ['RANCHER_URL'] = rancher_url
+                rancher_orch = str(os.environ['RANCHER_ORCHESTRATION']).rstrip()
 
                 actual_count = 0
                 timeout = 600
@@ -86,7 +87,10 @@ class RancherAgents(object):
                 while actual_count < count and elapsed_time < timeout:
                         try:
                                 sleep(sleep_step)
-                                result = run('rancher host list -q | grep active| wc -l', echo=True)
+                                project_id = '1a5'
+                                if rancher_orch == 'k8s':
+                                    project_id = run('rancher --url http://{}:8080 env ls --quiet | grep -v 1a5'.format(self.IP())).stdout.rstrip('\n\r')
+                                result = run('rancher --env {} host list -q | grep active| wc -l'.format(project_id), echo=True)
                                 actual_count = int(result.stdout.rstrip())
                                 elapsed_time = time() - start_time
                                 log_info("{} seconds elapsed waiting for {} active Rancher Agents...".format(elapsed_time, count))
