@@ -123,7 +123,7 @@ class RancherAgents(object):
                                 project_id = '1a5'
                                 if rancher_orch == 'k8s':
                                     project_id = run('rancher --url http://{}:8080 env ls --quiet | grep -v 1a5'.format(RancherServer().IP())).stdout.rstrip('\n\r')
-                                stack_health = run("rancher inspect {} | jq '.healthState'".format(project_id)).stdout.rstrip('\n\r')
+                                stack_health = run("rancher inspect {} | jq .healthState".format(project_id)).stdout.rstrip('\n\r')
                                 elapsed_time = time() - start_time
                                 log_info("{} seconds elapsed waiting for k8s stack...".format(elapsed_time))
 
