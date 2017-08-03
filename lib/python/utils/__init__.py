@@ -684,7 +684,7 @@ def ec2_node_ensure(nodename, instance_type='m4.large'):
             iam_profile = {'Name': iam_profile.name}
 
             # resize the root volume to 30 GB
-            custom_vols = [{'DeviceName': '/dev/xvda', 'Ebs': {'VolumeSize': 30}}]
+            custom_vols = [{'DeviceName': '/dev/sda1', 'Ebs': {'VolumeSize': 30}}]
 
             # RHEL osfamily needs a second LVM volume for thinpool config
             if 'rhel' in server_os or 'centos' in server_os:
