@@ -89,7 +89,7 @@ class RancherAgents(object):
                                 sleep(sleep_step)
                                 project_id = '1a5'
                                 if rancher_orch == 'k8s':
-                                    project_id = run('rancher --url http://{}:8080 env ls --quiet | grep -v 1a5'.format(self.IP())).stdout.rstrip('\n\r')
+                                    project_id = run('rancher --url http://{}:8080 env ls --quiet | grep -v 1a5'.format(RancherServer().IP())).stdout.rstrip('\n\r')
                                 result = run('rancher --env {} host list -q | grep active| wc -l'.format(project_id), echo=True)
                                 actual_count = int(result.stdout.rstrip())
                                 elapsed_time = time() - start_time
