@@ -17,7 +17,7 @@ RUN echo "UserKnownHostsFile=/dev/null" >> /etc/ssh/ssh_config
 
 # for inspec validation of spun infra
 RUN apt-get update && \
-    apt-get install -y jq autoconf bison build-essential libssl-dev libyaml-dev libreadline6-dev zlib1g-dev libncurses5-dev libffi-dev libgdbm3 libgdbm-dev && \
+    apt-get install -y autoconf bison build-essential libssl-dev libyaml-dev libreadline6-dev zlib1g-dev libncurses5-dev libffi-dev libgdbm3 libgdbm-dev && \
     apt-get install -y ruby2.1 ruby2.1-dev && \
     gem2.1 install --no-ri --no-rdoc inspec colorize ruby-lint
 
@@ -41,6 +41,14 @@ RUN (cd "${BUILDCACHE}" && \
       cp rancher-v*/rancher "${BINDIR}/") && \
       chmod +x "${BINDIR}/rancher" && \
       rm -rf "${BUILDCACHE}/rancher*"
+
+# Install jq
+ARG JQ_URI=https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64
+ADD "${JQ_URI} ${BUILDCACHE}/"
+RUN (cd "${BUILDCACHE}" && \
+      cp jq-* "${BINDIR}/jq") && \
+      chmod +x "${BINDIR}/jq" && \
+      rm -rf "${BUILDCACHE}/jq-*"
 
 # for provisioning of AWS EC2 instances
 ARG DOCKER_MACHINE_URI=https://github.com/docker/machine/releases/download/v0.8.2/docker-machine-Linux-x86_64
