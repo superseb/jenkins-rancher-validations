@@ -220,6 +220,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 	    sh "docker run --rm  " +
 	      "-v jenkins_home:/var/jenkins_home " +
 	      "--env-file .env " +
+        "-e WORKSPACE_DIR=\"\$(pwd)\" " +
         "rancherlabs/ci-validation-tests /bin/bash -c \'cd \"\$(pwd)\" && invoke rancher_server.configure\'"
 	  }
 
