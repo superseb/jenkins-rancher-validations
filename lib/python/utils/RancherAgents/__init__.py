@@ -239,8 +239,6 @@ class RancherAgents(object):
                         self.__ensure_agents_docker()
                         self.__ensure_rancher_agents_container()
                         self.__wait_on_active_agents(3)
-                        if rancher_orch == 'k8s':
-                            self.__wait_on_active_k8s()
                 except RancherAgentsError as e:
                         msg = "Failed while provisioning Rancher Agents!: {}".format(str(e))
                         log_debug(msg)
