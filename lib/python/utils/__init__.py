@@ -688,7 +688,7 @@ def ec2_node_ensure(nodename, instance_type='m4.large'):
 
             # RHEL osfamily needs a second LVM volume for thinpool config
             if 'rhel' in server_os or 'centos' in server_os:
-                custom_vols = custom_vols.append({
+                custom_vols.append({
                     'DeviceName': '/dev/sdb',
                     'Ebs': {'VolumeSize': 30, 'DeleteOnTermination': True}})
                 log_info("Creating second volume to host thinpool config for RHEL osfamily: {}".format(custom_vols))
