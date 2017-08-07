@@ -181,8 +181,9 @@ docker_install_tag_version() {
 ################################################################################
 switch_ros_docker_version() {
     local docker_version
-
-    docker_version="$(ec2_get_tag rancher.docker.version)" || exit $?
+    # change to 1.12 for now
+    # docker_version="$(ec2_get_tag rancher.docker.version)" || exit $?
+    docker_version="1.12"
     ros_docker_version=$(sudo ros engine list | grep ${docker_version} | cut -d " " -f2)
     sudo ros engine switch ${ros_docker_version}
 }
