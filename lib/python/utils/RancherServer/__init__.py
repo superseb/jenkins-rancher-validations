@@ -176,7 +176,7 @@ class RancherServer(object):
                 log_info('Deploying rancher/server:{}...'.format(rancher_version))
 
                 try:
-                         sshcmd = 'sudo docker run -d -p 8080:8080 --restart=always rancher/server:{}'.format(rancher_version)
+                         sshcmd = 'sudo docker run -e CATTLE_PROCESS_INSTANCE_PURGE_AFTER_SECONDS=172800 -d -p 8080:8080 --restart=always rancher/server:{}'.format(rancher_version)
                          SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd)
 
                 except SSHError as e:
