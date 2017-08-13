@@ -11,6 +11,10 @@ ENV PATH "${BINDIR}:/usr/local/bin:/bin:/sbin:/usr/bin:/usr/sbin"
 
 RUN mkdir -p "${BUILDCACHE}" "${BINDIR}" "${WORKDIR}"
 
+# Install Dependencies
+RUN apt-get update && \
+    apt-get install -y autoconf bison build-essential libssl-dev libyaml-dev libreadline6-dev zlib1g-dev libncurses5-dev libffi-dev libgdbm3 libgdbm-dev zip
+ 
 # This is required for auto-provisioning and configuration via SSH using Docker Machine and Rancher CLI
 RUN echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config
 RUN echo "UserKnownHostsFile=/dev/null" >> /etc/ssh/ssh_config
