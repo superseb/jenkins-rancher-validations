@@ -15,12 +15,6 @@ RUN mkdir -p "${BUILDCACHE}" "${BINDIR}" "${WORKDIR}"
 RUN echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config
 RUN echo "UserKnownHostsFile=/dev/null" >> /etc/ssh/ssh_config
 
-# for inspec validation of spun infra
-RUN apt-get update && \
-    apt-get install -y autoconf bison build-essential libssl-dev libyaml-dev libreadline6-dev zlib1g-dev libncurses5-dev libffi-dev libgdbm3 libgdbm-dev && \
-    apt-get install -y ruby2.1 ruby2.1-dev && \
-    gem2.1 install --no-ri --no-rdoc inspec colorize ruby-lint
-
 # for various operations against Rancher API
 ARG RANCHER_CLI_URI=https://github.com/rancher/cli/releases/download/v0.6.2/rancher-linux-amd64-v0.6.2.tar.gz
 ADD "${RANCHER_CLI_URI} ${BUILDCACHE}/"
