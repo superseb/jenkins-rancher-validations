@@ -4,7 +4,6 @@ from invoke import task, Collection, run, Failure
 from lib.python.utils import log_info, log_success, syntax_check, lint_check, err_and_exit
 from lib.python.utils.RancherAgents import RancherAgents, RancherAgentsError
 from lib.python.utils.RancherServer import RancherServer, RancherServerError
-from lib.python.utils.AWS import AWS, AWSError
 
 
 @task
