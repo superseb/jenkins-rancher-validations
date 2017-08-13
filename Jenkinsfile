@@ -135,6 +135,14 @@ def cattle_test_url_filename() {
   }
 }
 
+def project_id_filename() {
+  try {
+    return "project_id.${env.BUILD_NUMBER}"
+  } catch (MissingPropertyException e) {
+    echo "BUILD_NUMBER is required but was not set in env!"
+    error()
+  }
+}
 
 // Filter out Docker Hub tags like 'latest', 'master', 'enterprise'.
 // Just want things like v1.2*
@@ -212,19 +220,16 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 	    sh "docker run --rm  " +
 	      "-v jenkins_home:/var/jenkins_home " +
 	      "--env-file .env " +
+        "-e WORKSPACE_DIR=\"\$(pwd)\" " +
         "rancherlabs/ci-validation-tests /bin/bash -c \'cd \"\$(pwd)\" && invoke rancher_server.configure\'"
 	  }
 
-	  // this should be a temporary hack until the pipeline re-claims k8s agent
-	  // provisioning from the validation-tests code. Talk to @sangeetha.
-	  if ( 'k8s' != "${RANCHER_ORCHESTRATION}" ) {
 	    stage ('provision Rancher Agents') {
 	      sh "docker run --rm  " +
 		"-v jenkins_home:/var/jenkins_home " +
 		"--env-file .env " +
     "rancherlabs/ci-validation-tests /bin/bash -c \'cd \"\$(pwd)\" && invoke rancher_agents.provision\'"
 	    }
-	  }
 
 	  if ( "false" == "${PIPELINE_PROVISION_STOP}" ) {
 	    stage ('wait for infra catalogs to settle...') {
@@ -238,8 +243,9 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 	    stage ('run validation tests') {
 
 	      CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
+        PROJECT_ID = readFile(project_id_filename()).trim()
 
-	      withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}", "K8S_DEPLOY=${k8s_deploy()}"]) {
+	      withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}", "PROJECT_ID=${PROJECT_ID}", "ACCESS_KEY=test", "SECRET_KEY=test"]) {
 		sh "git clone https://github.com/rancher/validation-tests"
 		try {
 		def cmd = validation_tests_cmd()

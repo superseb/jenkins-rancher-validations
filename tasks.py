@@ -4,7 +4,6 @@ from invoke import task, Collection, run, Failure
 from lib.python.utils import log_info, log_success, syntax_check, lint_check, err_and_exit
 from lib.python.utils.RancherAgents import RancherAgents, RancherAgentsError
 from lib.python.utils.RancherServer import RancherServer, RancherServerError
-from lib.python.utils.AWS import AWS, AWSError
 
 
 @task
@@ -19,14 +18,6 @@ def syntax(ctx):
 
     log_info("Syntax checking of Python files...")
     syntax_check(os.path.dirname(__file__), 'py')
-    log_success()
-
-    log_info("Syntax checking of Puppet files...")
-    syntax_check(os.path.dirname(__file__), 'pp')
-    log_success()
-
-    log_info("Syntax checking of Ruby files...")
-    syntax_check(os.path.dirname(__file__), 'rb')
     log_success()
 
     log_info("Syntax checking of BASH scripts..")
@@ -56,14 +47,6 @@ def lint(ctx):
     log_info("Lint checking Python files...")
     lint_check(os.path.dirname(__file__), 'py', excludes=['validation-tests'])
     log_success()
-
-    log_info("Lint checking of Puppet files...")
-    lint_check(os.path.dirname(__file__), 'pp', excludes=['validation-tests'])
-    log_success()
-
-#    log_info("Lint checking of Ruby files...")
-#    lint_check(os.path.dirname(__file__), 'rb', excludes=['validation-tests'])
-#    log_success()
 
 
 @task(reset)
@@ -164,28 +147,11 @@ def rancher_agents_provision(ctx):
     log_success("Rancher Agents provisioning : [OK]")
 
 
-@task
-def aws_provision(ctx):
-    """
-    Provision AWS.
-    """
-    try:
-        AWS().provision()
-    except AWSError as e:
-        err_and_exit("Failed to provision AWS! : {}".format(e.message))
-    log_success("AWS VPC + Subnet provisioning : [OK]")
-
-
 ns = Collection('')
 ns.add_task(reset, 'reset')
 ns.add_task(syntax, 'syntax')
 ns.add_task(lint, 'lint')
 ns.add_task(ci, 'ci')
-
-aws = Collection('aws')
-aws.add_task(aws_provision, 'provision')
-# aws.add_task(aws_validate, 'validate')
-ns.add_collection(aws)
 
 rs = Collection('rancher_server')
 rs.add_task(rancher_server_provision, 'provision')

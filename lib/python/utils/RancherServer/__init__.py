@@ -1,6 +1,6 @@
 import os, boto3
 
-from invoke import Failure
+from invoke import run, Failure
 from requests import ConnectionError, HTTPError
 from time import sleep
 from boto3.exceptions import Boto3Error
@@ -176,7 +176,7 @@ class RancherServer(object):
                 log_info('Deploying rancher/server:{}...'.format(rancher_version))
 
                 try:
-                         sshcmd = 'sudo docker run -d -p 8080:8080 --restart=always rancher/server:{}'.format(rancher_version)
+                         sshcmd = 'sudo docker run -e CATTLE_PROCESS_INSTANCE_PURGE_AFTER_SECONDS=172800 -d -p 8080:8080 --restart=always rancher/server:{}'.format(rancher_version)
                          SSH(self.name(), self.IP(), os_settings['ssh_username'], sshcmd)
 
                 except SSHError as e:
@@ -254,10 +254,10 @@ class RancherServer(object):
                         raise RancherServerError(msg) from e
 
         #
-        def __set_reg_token(self):
+        def __set_reg_token(self, project_id):
                 log_info("Setting the initial agent reg token...")
 
-                reg_url = "http://{}:8080/v2-beta/projects/1a5/registrationtokens".format(self.IP())
+                reg_url = "http://{}:8080/v2-beta/projects/{}/registrationtokens".format(self.IP(), project_id)
                 try:
                         response = request_with_retries('POST', reg_url, step=20, attempts=20)
                 except RancherServerError as e:
@@ -272,7 +272,11 @@ class RancherServer(object):
         #
         def reg_command(self):
                 try:
-                        query_url = "http://{}:8080/v2-beta/projects/1a5/registrationtokens?state=active&limit=-1&sort=name".format(self.IP())
+                        rancher_orch = str(os.environ['RANCHER_ORCHESTRATION']).rstrip()
+                        project_id = '1a5'
+                        if rancher_orch == 'k8s':
+                            project_id = run('rancher --url http://{}:8080 env ls --quiet | grep -v 1a5'.format(self.IP())).stdout.rstrip('\n\r')
+                        query_url = "http://{}:8080/v2-beta/projects/{}/registrationtokens?state=active&limit=-1&sort=name".format(self.IP(), project_id)
                         response = request_with_retries('GET', query_url)
                         reg_command = response.json()['data'][0]['command']
                         log_debug("reg command: {}".format(reg_command))
@@ -313,11 +317,27 @@ class RancherServer(object):
         #
         def configure(self):
                 try:
+                        rancher_orch = str(os.environ['RANCHER_ORCHESTRATION']).rstrip()
                         self.__wait_for_api_provider()
                         log_info("Though the API provider is available, experience suggests sleeping for a bit is a good idea...")
                         sleep(30)
+                        project_id = '1a5'
+                        if rancher_orch == 'k8s':
+                            project_id = run('rancher --url http://{}:8080 env create -t kubernetes kubetest'.format(self.IP())).stdout.rstrip('\r\n')
+                        pwd = str(os.environ['WORKSPACE_DIR']).rstrip()
+                        project_id_filename = pwd + '/project_id'
+                        log_debug("Current working directory: {}".format(pwd))
+                        if os.environ.get('BUILD_NUMBER'):
+                                project_id_filename = "{}/project_id.{}".format(pwd, os.environ.get('BUILD_NUMBER'))
+                                log_debug("Found BUILD_NUMBER so PROJECT_ID set in '{}'...".format(project_id_filename))
+                        else:
+                                log_debug("Did not find BUILD_NUMBER so PROJECT_ID is set in default of 'project_id'...")
 
-                        self.__set_reg_token()
+                        with open(project_id_filename, 'w+') as f:
+                                f.write("{}".format(project_id))
+                                f.close()
+
+                        self.__set_reg_token(project_id)
                         self.__set_reg_url()
 
                 except RancherServerError as e:

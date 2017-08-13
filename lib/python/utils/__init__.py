@@ -519,12 +519,6 @@ def lint_check(rootdir, filetypes=[], excludes=[]):
                         'E111,E114,E122,E401,E402,E266,F841,E126,E501',
                         ' '.join(found_files))
 
-                elif '*.pp' == filetype:
-                    cmd = "puppet-lint {}".format(' '.join(found_files))
-
-                elif '*.rb' == filetype:
-                    cmd = "ruby-lint {}".format(' '.join(found_files))
-
 #                cmd = cmd.format(' '.join(found_files))
                 log_debug("Lint checking \'{}\'...".format(' '.join(found_files)))
                 if is_debug_enabled():
@@ -575,12 +569,6 @@ def syntax_check(rootdir, filetypes=[], excludes=[]):
 
                     elif '*.py' == filetype:
                         cmd = "python -m py_compile {}"
-
-                    elif '*.pp' == filetype:
-                        cmd = "puppet parser validate {}"
-
-                    elif '*.rb' == filetype:
-                        cmd = "ruby -c {}"
 
                     # do the syntax check
                     if '*.yaml' == filetype or '*.yaml' == filetype:
@@ -683,43 +671,31 @@ def ec2_node_ensure(nodename, instance_type='m4.large'):
             iam_profile = boto3.resource('iam').InstanceProfile(str(os.environ['AWS_INSTANCE_PROFILE']))
             iam_profile = {'Name': iam_profile.name}
 
-            # CoreOS is odd-ball in that it uses a different root volume
-            if 'core' in server_os:
-                custom_vols = [{'DeviceName': '/dev/xvda', 'Ebs': {'VolumeSize': 30}}]
-                log_info("Setting custom root device '{}' for CoreOS...".format(custom_vols))
+            # resize the root volume to 30 GB
+            custom_vols = [{'DeviceName': '/dev/sda1', 'Ebs': {'VolumeSize': 30}}]
 
             # RHEL osfamily needs a second LVM volume for thinpool config
             if 'rhel' in server_os or 'centos' in server_os:
-                custom_vols = [{
+                custom_vols.append({
                     'DeviceName': '/dev/sdb',
-                    'Ebs': {'VolumeSize': 30, 'DeleteOnTermination': True}}]
+                    'Ebs': {'VolumeSize': 30, 'DeleteOnTermination': True}})
                 log_info("Creating second volume to host thinpool config for RHEL osfamily: {}".format(custom_vols))
 
             log_info("Creating Rancher Server '{}'...".format(nodename))
 
             # have to include block device mapping configs for these OSes and setting
             # the parameter to None makes the boto3 API unhappy. :\
-            if 'rhel' in server_os or 'centos' in server_os or 'core' in server_os:
-                instance = ec2.run_instances(
-                    ImageId=os_settings['ami-id'],
-                    MinCount=1,
-                    MaxCount=1,
-                    KeyName=keyname,
-                    InstanceType=instance_type,
-                    Placement=placement,
-                    NetworkInterfaces=network_ifs,
-                    IamInstanceProfile=iam_profile,
-                    BlockDeviceMappings=custom_vols)
-            else:
-                instance = ec2.run_instances(
-                    ImageId=os_settings['ami-id'],
-                    MinCount=1,
-                    MaxCount=1,
-                    KeyName=keyname,
-                    InstanceType=instance_type,
-                    Placement=placement,
-                    NetworkInterfaces=network_ifs,
-                    IamInstanceProfile=iam_profile)
+
+            instance = ec2.run_instances(
+                ImageId=os_settings['ami-id'],
+                MinCount=1,
+                MaxCount=1,
+                KeyName=keyname,
+                InstanceType=instance_type,
+                Placement=placement,
+                NetworkInterfaces=network_ifs,
+                IamInstanceProfile=iam_profile,
+                BlockDeviceMappings=custom_vols)
 
             log_debug("run request response for '{}'...".format(instance))
             log_debug("instance info: {}".format(instance['Instances']))

@@ -76,6 +76,7 @@ class RancherAgents(object):
         def __wait_on_active_agents(self, count):
                 rancher_url = "http://{}:8080/v2-beta/schemas".format(RancherServer().IP())
                 os.environ['RANCHER_URL'] = rancher_url
+                rancher_orch = str(os.environ['RANCHER_ORCHESTRATION']).rstrip()
 
                 actual_count = 0
                 timeout = 600
@@ -86,7 +87,10 @@ class RancherAgents(object):
                 while actual_count < count and elapsed_time < timeout:
                         try:
                                 sleep(sleep_step)
-                                result = run('rancher host list -q | grep active| wc -l', echo=True)
+                                project_id = '1a5'
+                                if rancher_orch == 'k8s':
+                                    project_id = run('rancher --url http://{}:8080 env ls --quiet | grep -v 1a5'.format(RancherServer().IP())).stdout.rstrip('\n\r')
+                                result = run('rancher --env {} host list -q | grep active| wc -l'.format(project_id), echo=True)
                                 actual_count = int(result.stdout.rstrip())
                                 elapsed_time = time() - start_time
                                 log_info("{} seconds elapsed waiting for {} active Rancher Agents...".format(elapsed_time, count))
@@ -98,6 +102,38 @@ class RancherAgents(object):
 
                 if actual_count < count and elapsed_time > timeout:
                         msg = "Timed out waiting for {} agents to become active!".format(count)
+                        log_debug(msg)
+                        raise RancherAgentsError(msg)
+
+        #
+        def __wait_on_active_k8s(self):
+                rancher_url = "http://{}:8080/v2-beta/schemas".format(RancherServer().IP())
+                os.environ['RANCHER_URL'] = rancher_url
+                rancher_orch = str(os.environ['RANCHER_ORCHESTRATION']).rstrip()
+
+                stack_health = "unhealthy"
+                timeout = 600
+                elapsed_time = 0
+                sleep_step = 30
+
+                start_time = time()
+                while stack_health != "healthy" and elapsed_time < timeout:
+                        try:
+                                sleep(sleep_step)
+                                project_id = '1a5'
+                                if rancher_orch == 'k8s':
+                                    project_id = run('rancher --url http://{}:8080 env ls --quiet | grep -v 1a5'.format(RancherServer().IP())).stdout.rstrip('\n\r')
+                                stack_health = run("rancher inspect {} | jq .healthState".format(project_id)).stdout.rstrip('\n\r')
+                                elapsed_time = time() - start_time
+                                log_info("{} seconds elapsed waiting for k8s stack...".format(elapsed_time))
+
+                        except Failure as e:
+                                msg = "Failed while trying to wait to kubernetes stack!: {}".format(str(e))
+                                log_debug(msg)
+                                raise RancherAgentsError(msg) from e
+
+                if stack_health != "healthy" and elapsed_time > timeout:
+                        msg = "Timed out waiting for k8s stack to become active!"
                         log_debug(msg)
                         raise RancherAgentsError(msg)
 
@@ -198,6 +234,7 @@ class RancherAgents(object):
         #
         def provision(self):
                 try:
+                        rancher_orch = str(os.environ['RANCHER_ORCHESTRATION']).rstrip()
                         self.__ensure_rancher_agents()
                         self.__ensure_agents_docker()
                         self.__ensure_rancher_agents_container()

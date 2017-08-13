@@ -1,5 +1,4 @@
 import os
-from invoke import run, Failure
 
 from .. import log_debug
 
@@ -31,29 +30,3 @@ class AWS(object):
     #
     def __init__(self):
         self.__validate_envvars()
-
-    #
-    def provision(self):
-        try:
-            run('rm -rf /tmp/puppet', echo=True)
-            run('mkdir -p /tmp/puppet/modules && cp ./lib/puppet/Puppetfile /tmp/puppet/', echo=True)
-            run('cd /tmp/puppet && librarian-puppet install --no-verbose --clean --path /tmp/puppet/modules', echo=True)
-            run('cp -r ./lib/puppet/modules/rancher_infra /tmp/puppet/modules', echo=True)
-
-            manifest = "include ::rancher_infra\n" + \
-            "include ::rancher_infra::ci::validation_tests\n" + \
-            "include ::rancher_infra::ci::validation_tests::aws\n"
-
-            with open('/tmp/puppet/manifest.pp', 'w') as manifest_file:
-                manifest_file.write(manifest)
-
-            run('puppet apply --modulepath=/tmp/puppet/modules --verbose /tmp/puppet/manifest.pp', echo=True)
-
-        except Failure as e:
-            # These are non-failure exit codes for puppet apply.
-            if e.result.exited not in [0, 2]:
-                msg = "Failed during provision of AWS network!: {} :: {}".format(e.result.return_code, e.result.stderr)
-                log_debug(msg)
-                raise AWSError(msg)
-
-        return True
