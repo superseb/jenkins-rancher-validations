@@ -33,7 +33,8 @@ class RancherAgents(object):
                                     'RANCHER_AGENT_OPERATINGSYSTEM',
                                     'RANCHER_ORCHESTRATION',
                                     'RANCHER_AGENT_AWS_INSTANCE_TYPE',
-                                    'RANCHER_DOCKER_VERSION']
+                                    'RANCHER_DOCKER_VERSION',
+                                    'RANCHER_AGENTS_COUNT']
 
                 result = True
                 missing = []
@@ -139,6 +140,7 @@ class RancherAgents(object):
 
         #
         def __ensure_rancher_agents(self):
+                agent_count = int(str(os.environ['RANCHER_AGENTS_COUNT']).rstrip())
                 max_attempts = 10
                 attempts = 0
                 agents = 0
@@ -159,13 +161,13 @@ class RancherAgents(object):
                                 msg = "Failed while provisioning agent '{}'!: {}".format(agent_name, str(e))
                                 log_warn(msg)
 
-                        if agents >= 3 or attempts >= max_attempts:
+                        if agents >= agent_count or attempts >= max_attempts:
                                 break
 
-                if agents >= 3:
+                if agents >= agent_count:
                         return True
                 else:
-                        msg = "Failed to provision 3 agents after 10 attempts! Giving up..."
+                        msg = "Failed to provision " + str(agent_count) + " agents after 10 attempts! Giving up..."
                         log_debug(msg)
                         raise RancherAgentsError(msg)
 
@@ -192,9 +194,10 @@ class RancherAgents(object):
         #
         def __ensure_agents_docker(self):
                 agent_prefix = self.__agent_name_prefix()
+                agent_count = int(str(os.environ['RANCHER_AGENTS_COUNT']).rstrip())
 
                 try:
-                        for agent in range(0, 3):
+                        for agent in range(0, agent_count):
                                 agent_name = agent_prefix + str(agent)
                                 log_info("Installing Docker on Rancher Agent '{}'...".format(agent_name))
                                 self.__install_docker(agent_name)
@@ -210,6 +213,7 @@ class RancherAgents(object):
         def __ensure_rancher_agents_container(self):
                 log_info("Deploying Rancher Agent container...")
 
+                agent_count = int(str(os.environ['RANCHER_AGENTS_COUNT']).rstrip())
                 region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
                 agent_os = str(os.environ['RANCHER_AGENT_OPERATINGSYSTEM']).rstrip()
                 os_settings = os_to_settings(agent_os)
@@ -219,7 +223,7 @@ class RancherAgents(object):
                 try:
                         reg_command = RancherServer().reg_command()
 
-                        for agent in range(0, 3):
+                        for agent in range(0, agent_count):
                                 agent_name = agent_prefix + str(agent)
                                 addr = ec2_node_public_ip(agent_name, region=region)
                                 SSH(agent_name, addr, ssh_user, reg_command)
@@ -233,12 +237,13 @@ class RancherAgents(object):
 
         #
         def provision(self):
+                agent_count = int(str(os.environ['RANCHER_AGENTS_COUNT']).rstrip())
                 try:
                         rancher_orch = str(os.environ['RANCHER_ORCHESTRATION']).rstrip()
                         self.__ensure_rancher_agents()
                         self.__ensure_agents_docker()
                         self.__ensure_rancher_agents_container()
-                        self.__wait_on_active_agents(3)
+                        self.__wait_on_active_agents(agent_count)
                 except RancherAgentsError as e:
                         msg = "Failed while provisioning Rancher Agents!: {}".format(str(e))
                         log_debug(msg)
@@ -251,9 +256,9 @@ class RancherAgents(object):
                 log_info("Deprovisioning Rancher Agents...")
 
                 region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
-
+                agent_count = int(str(os.environ['RANCHER_AGENTS_COUNT']).rstrip())
                 try:
-                        for agent in range(0, 3):
+                        for agent in range(0, agent_count):
                                 agent_name = self.__agent_name_prefix() + str(agent)
                                 ec2_node_terminate(agent_name, region=region)
                                 nuke_aws_keypair(agent_name)
