@@ -18,8 +18,6 @@ get_osfamily() {
 	osfamily='debian'
     elif yum --version > /dev/null 2>&1; then
 	osfamily='redhat'
-    elif ros --version > /dev/null 2>&1; then
-  osfamily='ros'
     fi
     set -e
 
@@ -176,18 +174,6 @@ docker_install_tag_version() {
     sudo puppet resource service docker ensure=running
 }
 
-################################################################################
-# Change Docker version for ROS to docker version
-################################################################################
-switch_ros_docker_version() {
-    local docker_version
-    # change to 1.12 for now
-    # docker_version="$(ec2_get_tag rancher.docker.version)" || exit $?
-    docker_version="1.12"
-    ros_docker_version=$(sudo ros engine list | grep ${docker_version} | cut -d " " -f2)
-    sudo ros engine switch ${ros_docker_version}
-}
-
 ###############################################################################
 # populate system with Rancher Labs SSH keys
 ###############################################################################
@@ -300,8 +286,6 @@ main() {
 
     elif [ 'debian' == "${osfamily}" ]; then
       docker_install_tag_version
-    elif [ 'ros' == "${osfamily}" ]; then
-      switch_ros_docker_version
     else
 	echo "OS family \'${osfamily}\' will default to vendor supplied and pre-installed Docker engine."
     fi
