@@ -170,8 +170,7 @@ docker_install_tag_version() {
 
     docker_version="$(ec2_get_tag rancher.docker.version)" || exit $?
     wget -O - "https://releases.rancher.com/install-docker/${docker_version}.sh" | sudo bash -
-    sudo puppet resource service docker ensure=stopped
-    sudo puppet resource service docker ensure=running
+    sudo service docker restart
 }
 
 ###############################################################################
@@ -204,8 +203,7 @@ system_prep() {
 	    #	    sudo yum groupinstall -y "Development Tools"
 	    #	    sudo yum install -y gcc-c++ patch readline readline-devel zlib zlib-devel libyaml-devel libffi-devel openssl-devel make bzip2 autoconf automake libtool bison iconv-devel
 
-	    sudo yum install --skip-broken -y jq python-pip htop puppet python-docutils mosh
-	    sudo puppet resource service puppet ensure=stopped enable=false
+	    sudo yum install --skip-broken -y jq python-pip htop python-docutils mosh
 	    sudo pip install awscli
 	    sudo wget -O /usr/local/bin/ec2metadata http://s3.amazonaws.com/ec2metadata/ec2-metadata
 	    sudo chmod +x /usr/local/bin/ec2metadata
@@ -216,8 +214,7 @@ system_prep() {
 	    export DEBCONF_NONINTERACTIVE_SEEN=true
 	    sudo apt-get update
 	    sudo apt-get -y upgrade
-	    sudo apt-get install -y jq awscli htop mosh cloud-guest-utils puppet
-	    sudo puppet resource service puppet ensure=stopped enable=false
+	    sudo apt-get install -y jq awscli htop mosh cloud-guest-utils
 	    ;;
 
 	default)

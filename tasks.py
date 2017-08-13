@@ -21,14 +21,6 @@ def syntax(ctx):
     syntax_check(os.path.dirname(__file__), 'py')
     log_success()
 
-    log_info("Syntax checking of Puppet files...")
-    syntax_check(os.path.dirname(__file__), 'pp')
-    log_success()
-
-    log_info("Syntax checking of Ruby files...")
-    syntax_check(os.path.dirname(__file__), 'rb')
-    log_success()
-
     log_info("Syntax checking of BASH scripts..")
     syntax_check(os.path.dirname(__file__), 'sh')
     log_success()
@@ -56,14 +48,6 @@ def lint(ctx):
     log_info("Lint checking Python files...")
     lint_check(os.path.dirname(__file__), 'py', excludes=['validation-tests'])
     log_success()
-
-    log_info("Lint checking of Puppet files...")
-    lint_check(os.path.dirname(__file__), 'pp', excludes=['validation-tests'])
-    log_success()
-
-#    log_info("Lint checking of Ruby files...")
-#    lint_check(os.path.dirname(__file__), 'rb', excludes=['validation-tests'])
-#    log_success()
 
 
 @task(reset)
@@ -164,28 +148,11 @@ def rancher_agents_provision(ctx):
     log_success("Rancher Agents provisioning : [OK]")
 
 
-@task
-def aws_provision(ctx):
-    """
-    Provision AWS.
-    """
-    try:
-        AWS().provision()
-    except AWSError as e:
-        err_and_exit("Failed to provision AWS! : {}".format(e.message))
-    log_success("AWS VPC + Subnet provisioning : [OK]")
-
-
 ns = Collection('')
 ns.add_task(reset, 'reset')
 ns.add_task(syntax, 'syntax')
 ns.add_task(lint, 'lint')
 ns.add_task(ci, 'ci')
-
-aws = Collection('aws')
-aws.add_task(aws_provision, 'provision')
-# aws.add_task(aws_validate, 'validate')
-ns.add_collection(aws)
 
 rs = Collection('rancher_server')
 rs.add_task(rancher_server_provision, 'provision')

@@ -519,12 +519,6 @@ def lint_check(rootdir, filetypes=[], excludes=[]):
                         'E111,E114,E122,E401,E402,E266,F841,E126,E501',
                         ' '.join(found_files))
 
-                elif '*.pp' == filetype:
-                    cmd = "puppet-lint {}".format(' '.join(found_files))
-
-                elif '*.rb' == filetype:
-                    cmd = "ruby-lint {}".format(' '.join(found_files))
-
 #                cmd = cmd.format(' '.join(found_files))
                 log_debug("Lint checking \'{}\'...".format(' '.join(found_files)))
                 if is_debug_enabled():
@@ -575,12 +569,6 @@ def syntax_check(rootdir, filetypes=[], excludes=[]):
 
                     elif '*.py' == filetype:
                         cmd = "python -m py_compile {}"
-
-                    elif '*.pp' == filetype:
-                        cmd = "puppet parser validate {}"
-
-                    elif '*.rb' == filetype:
-                        cmd = "ruby -c {}"
 
                     # do the syntax check
                     if '*.yaml' == filetype or '*.yaml' == filetype:

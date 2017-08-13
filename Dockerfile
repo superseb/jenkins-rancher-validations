@@ -7,7 +7,7 @@ ARG BUILDCACHE=/tmp/build
 ARG WORKDIR=/workdir
 
 ENV TERM=ansi DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true
-ENV PATH "${BINDIR}:/opt/puppetlabs/bin:/opt/puppetlabs/puppet/bin:/usr/local/bin:/bin:/sbin:/usr/bin:/usr/sbin"
+ENV PATH "${BINDIR}:/usr/local/bin:/bin:/sbin:/usr/bin:/usr/sbin"
 
 RUN mkdir -p "${BUILDCACHE}" "${BINDIR}" "${WORKDIR}"
 
@@ -20,18 +20,6 @@ RUN apt-get update && \
     apt-get install -y autoconf bison build-essential libssl-dev libyaml-dev libreadline6-dev zlib1g-dev libncurses5-dev libffi-dev libgdbm3 libgdbm-dev && \
     apt-get install -y ruby2.1 ruby2.1-dev && \
     gem2.1 install --no-ri --no-rdoc inspec colorize ruby-lint
-
-# for AWS VPC provisioning
-ARG PUPPET_RELEASE_URI=https://apt.puppetlabs.com/puppetlabs-release-pc1-jessie.deb
-ADD "${PUPPET_RELEASE_URI} ${BUILDCACHE}/"
-RUN dpkg -i ${BUILDCACHE}/puppetlabs*.deb && \
-    apt-get update && \
-    apt-get install -y puppet-agent zip && \
-    puppet resource service puppet ensure=stopped enable=false && \
-    gem install puppet-lint librarian-puppet aws-sdk-core retries && \
-    apt-get clean all && \
-    rm -rf "${BUILDCACHE}/puppetlabs*.deb"
-ADD ./lib/puppet/Puppetfile /etc/puppetlabs/code/
 
 # for various operations against Rancher API
 ARG RANCHER_CLI_URI=https://github.com/rancher/cli/releases/download/v0.6.2/rancher-linux-amd64-v0.6.2.tar.gz
