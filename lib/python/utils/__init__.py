@@ -232,16 +232,17 @@ def os_to_settings(os):
         ami = 'ami-d2c924b2'
         ssh_username = 'centos'
 
-    elif 'rhel-7' in os:
-        ami = 'ami-6f68cf0f'
-        ssh_username = 'ec2-user'
-
     elif 'rhel-7.4' in os:
-        ami = 'ami-52766d2b'
+        ami = 'ami-9fa343e7'
         ssh_username = 'ec2-user'
 
     elif 'rhel-7.2' in os:
         ami = 'ami-775e4f16'
+        ssh_username = 'ec2-user'
+# this needs to be the last rhel-7 to check, because it
+# matches *any* rhel-7*
+    elif 'rhel-7' in os:
+        ami = 'ami-6f68cf0f'
         ssh_username = 'ec2-user'
 
     elif 'rancheros-v07' in os:
