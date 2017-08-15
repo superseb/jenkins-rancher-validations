@@ -86,6 +86,13 @@ ec2_get_tag() {
 docker_lvm_thinpool_config() {
     local docker_version
     docker_version="$(ec2_get_tag rancher.docker.version)" || exit $?
+    rhel_selinux="$(ec2_get_tag rancher.docker.rhel.selinux)" || exit $?
+
+    # configure selinux
+    if [ ${rhel_selinux} == "false" ]; then
+      sudo setenforce 0
+    fi
+    # else it's enabled by default
 
     wget -O - "https://releases.rancher.com/install-docker/${docker_version}.sh" | sudo bash -
 

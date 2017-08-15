@@ -24,7 +24,7 @@ def ec2_compute_tags(nodename):
     tags = str(os.environ['AWS_TAGS']).rstrip()
     tags += ',rancher.docker.version,{}'.format(docker_version)
     tags += ',rancher.docker.native,{}'.format(docker_native)
-    tags += ',rancher.docker.rhel.selinux,{}'.format(docker_native)
+    tags += ',rancher.docker.rhel.selinux,{}'.format(rhel_selinux)
     tags += ',Name,{}'.format(nodename)
     return tag_csv_to_array(tags)
 
