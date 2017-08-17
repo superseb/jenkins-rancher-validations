@@ -2,7 +2,7 @@ import os
 
 from invoke import run, Failure
 from time import sleep, time
-from .. import log_info, log_debug, log_warn, os_to_settings, nuke_aws_keypair
+from .. import log_info, log_success, log_debug, log_warn, os_to_settings, nuke_aws_keypair
 from .. import ec2_node_ensure, ec2_node_terminate, ec2_node_public_ip
 
 from ..RancherServer import RancherServer, RancherServerError
@@ -248,6 +248,34 @@ class RancherAgents(object):
                         msg = "Failed while provisioning Rancher Agents!: {}".format(str(e))
                         log_debug(msg)
                         raise RancherAgentsError(msg) from e
+
+                return True
+
+        #
+        def provision_standalone(self):
+                agent_count = int(str(os.environ['RANCHER_AGENTS_COUNT']).rstrip())
+                agent_prefix = self.__agent_name_prefix()
+                region = str(os.environ['AWS_DEFAULT_REGION']).rstrip()
+                reg_command = str(os.environ.get('RANCHER_REGISTRATION_COMMAND', False)).rstrip()
+                agent_os = str(os.environ['RANCHER_AGENT_OPERATINGSYSTEM']).rstrip()
+                os_settings = os_to_settings(agent_os)
+                ssh_user = os_settings['ssh_username']
+
+                try:
+                        self.__ensure_rancher_agents()
+                        self.__ensure_agents_docker()
+
+                except RancherAgentsError as e:
+                        msg = "Failed while provisioning Rancher Agents!: {}".format(str(e))
+                        log_debug(msg)
+                        raise RancherAgentsError(msg) from e
+
+                for agent in range(0, agent_count):
+                    agent_name = agent_prefix + str(agent)
+                    addr = ec2_node_public_ip(agent_name, region=region)
+                    log_success("Standalone Agent {}: {}".format(agent_name, addr))
+                    if reg_command is not 'False':
+                        SSH(agent_name, addr, ssh_user, reg_command)
 
                 return True
 

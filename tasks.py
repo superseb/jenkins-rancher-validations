@@ -147,6 +147,18 @@ def rancher_agents_provision(ctx):
     log_success("Rancher Agents provisioning : [OK]")
 
 
+@task
+def rancher_agents_provision_standalone(ctx):
+    """
+    Provision Rancher Agent nodes.
+    """
+    try:
+        RancherAgents().provision_standalone()
+    except RancherAgentsError as e:
+        err_and_exit("Failed to provision Rancher Agent nodes! : {}".format(e.message))
+    log_success("Rancher Agents provisioning : [OK]")
+
+
 ns = Collection('')
 ns.add_task(reset, 'reset')
 ns.add_task(syntax, 'syntax')
@@ -163,4 +175,5 @@ ns.add_collection(rs)
 ra = Collection('rancher_agents')
 ra.add_task(rancher_agents_provision, 'provision')
 ra.add_task(rancher_agents_deprovision, 'deprovision')
+ra.add_task(rancher_agents_provision_standalone, 'provisionstandalone')
 ns.add_collection(ra)
