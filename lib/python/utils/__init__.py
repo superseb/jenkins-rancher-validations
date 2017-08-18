@@ -239,9 +239,7 @@ def os_to_settings(os):
     elif 'rhel-7.2' in os:
         ami = 'ami-5dd3743d'
         ssh_username = 'ec2-user'
-# this needs to be the last rhel-7 to check, because it
-# matches *any* rhel-7*
-    elif 'rhel-7' in os:
+    elif 'rhel-7.3' in os:
         ami = 'ami-6f68cf0f'
         ssh_username = 'ec2-user'
 
