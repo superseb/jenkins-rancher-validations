@@ -47,7 +47,7 @@ class SSH(object):
 
     #
     def __init__(self, key, addr, user, cmd, timeout=10, max_attempts=10):
-        self.default_ssh_options = '-o StrictHostKeyChecking=no -o ConnectTimeout={} -i .ssh/{}'.format(timeout, key)
+        self.default_ssh_options = '-o StrictHostKeyChecking=no -o ConnectTimeout={} -tt -i .ssh/{}'.format(timeout, key)
         self.__cmd(key, addr, user, cmd, max_attempts)
 
 

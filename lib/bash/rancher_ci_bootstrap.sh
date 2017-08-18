@@ -210,7 +210,7 @@ system_prep() {
 	    #	    sudo yum groupinstall -y "Development Tools"
 	    #	    sudo yum install -y gcc-c++ patch readline readline-devel zlib zlib-devel libyaml-devel libffi-devel openssl-devel make bzip2 autoconf automake libtool bison iconv-devel
 
-	    sudo yum install --skip-broken -y jq python-pip htop python-docutils mosh
+	    sudo yum install  -y jq python-pip htop  mosh
 	    sudo pip install awscli
 	    sudo wget -O /usr/local/bin/ec2metadata http://s3.amazonaws.com/ec2metadata/ec2-metadata
 	    sudo chmod +x /usr/local/bin/ec2metadata
