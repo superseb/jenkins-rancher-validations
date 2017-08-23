@@ -156,7 +156,7 @@ class RancherServer(object):
         #
         def __wait_for_api_provider(self):
 
-                api_url = "http://{}:8080/v1/schemas/amazonec2Config".format(self.IP())
+                api_url = "http://{}:8080/v2-beta".format(self.IP())
                 log_info("Polling \'{}\' for active API provider...".format(api_url))
 
                 try:
