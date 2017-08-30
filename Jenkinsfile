@@ -246,7 +246,7 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
         PROJECT_ID = readFile(project_id_filename()).trim()
 
 	      withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}", "PROJECT_ID=${PROJECT_ID}", "ACCESS_KEY=test", "SECRET_KEY=test"]) {
-		sh "git clone https://github.com/rancher/validation-tests"
+		sh "git clone -b socat_ssl https://github.com/galal-hussein/validation-tests"
 		try {
 		def cmd = validation_tests_cmd()
 		sh "${cmd}"
