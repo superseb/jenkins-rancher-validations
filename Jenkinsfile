@@ -245,7 +245,8 @@ if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
 	      CATTLE_TEST_URL = readFile(cattle_test_url_filename()).trim()
         PROJECT_ID = readFile(project_id_filename()).trim()
 
-	      withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}", "PROJECT_ID=${PROJECT_ID}", "ACCESS_KEY=test", "SECRET_KEY=test"]) {
+	      withEnv(["CATTLE_TEST_URL=${CATTLE_TEST_URL}", "PROJECT_ID=${PROJECT_ID}", "ACCESS_KEY=test", "SECRET_KEY=test",
+                 "CATTLE_CLUSTER_SOCAT_IMAGE=${CATTLE_CLUSTER_SOCAT_IMAGE}"]) {
 		sh "git clone -b socat_ssl https://github.com/galal-hussein/validation-tests"
 		try {
 		def cmd = validation_tests_cmd()
