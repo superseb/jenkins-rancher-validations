@@ -15,9 +15,11 @@ get_osfamily() {
     # ugly way to figure out what OS family we are running.
     set +e
     if apt-get --version > /dev/null 2>&1; then
-	osfamily='debian'
+	    osfamily='debian'
     elif yum --version > /dev/null 2>&1; then
-	osfamily='redhat'
+	    osfamily='redhat'
+    elif sudo ros -v > /dev/null 2>&1; then
+      osfamily='rancheros'
     fi
     set -e
 
@@ -79,7 +81,39 @@ ec2_get_tag() {
     echo "${ec2_tag}"
 }
 
+###############################################################################
+# get the preferred Docker version from EC2 tag for ROS
+###############################################################################
+ros_ec2_get_tag() {
+    local instance_id
+    local region
+    local ec2_tag
 
+
+    instance_id="$(sudo docker run --rm melsayed/docker-awscli:latest ec2metadata --instance-id | cut -f2 -d' ')" || exit $?
+
+    if [ -z "${instance_id}" ]; then
+	     echo 'Failed to query AWS instance-id!'
+	     exit -1
+    fi
+
+    region="$(sudo docker run --rm melsayed/docker-awscli:latest ec2metadata --availability-zone | cut -f2 -d' ' | sed -e 's/.$//g')" || exit $?
+
+    if [ -z "${region}" ]; then
+	     echo 'Failed to query AWS region!'
+	     exit -1
+    fi
+
+    ec2_tag="$(sudo docker run --rm melsayed/docker-awscli:latest aws ec2 --region "${region}" describe-tags --filter Name=resource-id,Values="${instance_id}" --out=json | \
+			   jq ".Tags[]| select(.Key == \"$1\")|.Value" | \
+			   sed -e 's/\"//g')" || exit $?
+
+    if [ -z "${ec2_tag}" ]; then
+	echo 'Failed to query ec2 tag from instance tags.'
+	exit 1
+    fi
+    echo "${ec2_tag}"
+}
 ###############################################################################
 # Docker volume LVM adjustments done the right way. :\
 ###############################################################################
@@ -267,6 +301,23 @@ EOF
     sudo lvs -o+seg_monitor
 }
 
+###############################################################################
+# Switch Rancher OS docker version based on ${docker_version}
+###############################################################################
+ros_switch_docker(){
+  local docker_version
+  docker_version="$(ros_ec2_get_tag rancher.docker.version)" || exit $?
+  current_version=`sudo ros engine list| grep current | cut -d " " -f 3 | cut -d"." -f 1,2`
+
+  if [ "docker-${docker_version}" != "${current_version}" ]; then
+    req_version=`sudo ros engine list| grep docker-${docker_version} | cut -d " " -f 2`
+    echo "Switching docker to ${req_version} ..."
+    sudo system-docker stop docker
+    sudo ros engine switch ${req_version}
+  else
+    echo "Docker version ${docker_version} is already installed..."
+  fi
+}
 
 ###############################################################################
 # the main() function
@@ -279,19 +330,22 @@ main() {
     osfamily="$(get_osfamily)" || exit $?
 
     if [ 'redhat' == "${osfamily}" ]; then
-	echo 'Performing special RHEL osfamily storage config...'
-	redhat_config
-  use_native_docker="$(ec2_get_tag rancher.docker.native)" || exit $?
-  if [ ${use_native_docker} == "true" ]; then
-    docker_lvm_thinpool_config_native
-  else
-    docker_lvm_thinpool_config
-  fi
+    	echo 'Performing special RHEL osfamily storage config...'
+    	redhat_config
+      use_native_docker="$(ec2_get_tag rancher.docker.native)" || exit $?
+      if [ ${use_native_docker} == "true" ]; then
+        docker_lvm_thinpool_config_native
+      else
+        docker_lvm_thinpool_config
+      fi
 
     elif [ 'debian' == "${osfamily}" ]; then
       docker_install_tag_version
+
+    elif [ 'rancheros' == "${osfamily}" ]; then
+      ros_switch_docker
     else
-	echo "OS family \'${osfamily}\' will default to vendor supplied and pre-installed Docker engine."
+    	echo "OS family \'${osfamily}\' will default to vendor supplied and pre-installed Docker engine."
     fi
 }
 
