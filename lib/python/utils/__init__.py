@@ -736,6 +736,7 @@ def ec2_node_ensure(nodename, instance_type='m4.large'):
         log_debug(msg)
         raise RuntimeError(msg) from e
 
+    nuke_aws_keypair(keyname)
     return True
 
 

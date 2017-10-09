@@ -2,7 +2,7 @@ import os
 
 from invoke import run, Failure
 from time import sleep, time
-from .. import log_info, log_success, log_debug, log_warn, os_to_settings, nuke_aws_keypair
+from .. import log_info, log_success, log_debug, log_warn, os_to_settings
 from .. import ec2_node_ensure, ec2_node_terminate, ec2_node_public_ip
 
 from ..RancherServer import RancherServer, RancherServerError
@@ -297,7 +297,7 @@ class RancherAgents(object):
                         for agent in range(0, agent_count):
                                 agent_name = self.__agent_name_prefix() + str(agent)
                                 ec2_node_terminate(agent_name, region=region)
-                                nuke_aws_keypair(agent_name)
+                                # nuke_aws_keypair(agent_name)
 
                 except (RancherAgentsError, RuntimeError) as e:
                         msg = "Failed with deprovisioning agent!: {}".format(str(e))

@@ -144,7 +144,7 @@ class RancherServer(object):
                                 instance_id = reservations[0]['Instances'][0]['InstanceId']
                                 log_info("Deprovisioning '{}'...".format(instance_id))
                                 ec2.terminate_instances(InstanceIds=[instance_id])
-                                ec2.delete_key_pair(KeyName=self.name())
+                                # ec2.delete_key_pair(KeyName=self.name())
 
                 except (Boto3Error, ClientError) as e:
                         msg = "Failed while deprovisioning Rancher Server node!: {}".format(str(e))
