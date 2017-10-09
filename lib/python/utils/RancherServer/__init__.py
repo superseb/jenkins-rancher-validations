@@ -155,8 +155,11 @@ class RancherServer(object):
 
         #
         def __wait_for_api_provider(self):
-
-                api_url = "http://{}:8080/v2-beta".format(self.IP())
+                rancher_version = str(os.environ['RANCHER_VERSION']).rstrip()
+                if "v2" in rancher_version:
+                    api_url = "http://{}:8080/v3".format(self.IP())
+                else:
+                    api_url = "http://{}:8080/v2-beta".format(self.IP())
                 log_info("Polling \'{}\' for active API provider...".format(api_url))
 
                 try:
@@ -256,7 +259,6 @@ class RancherServer(object):
         #
         def __set_reg_token(self, project_id):
                 log_info("Setting the initial agent reg token...")
-
                 reg_url = "http://{}:8080/v2-beta/projects/{}/registrationtokens".format(self.IP(), project_id)
                 try:
                         response = request_with_retries('POST', reg_url, step=20, attempts=20)
@@ -272,13 +274,20 @@ class RancherServer(object):
         #
         def reg_command(self):
                 try:
+                        rancher_version = str(os.environ['RANCHER_VERSION']).rstrip()
                         rancher_orch = str(os.environ['RANCHER_ORCHESTRATION']).rstrip()
                         project_id = '1a5'
                         if rancher_orch == 'k8s':
                             project_id = run('rancher --url http://{}:8080 env ls --quiet | grep -v 1a5'.format(self.IP())).stdout.rstrip('\n\r')
-                        query_url = "http://{}:8080/v2-beta/projects/{}/registrationtokens?state=active&limit=-1&sort=name".format(self.IP(), project_id)
-                        response = request_with_retries('GET', query_url)
-                        reg_command = response.json()['data'][0]['command']
+                        if "v2" in rancher_version:
+                            query_url = "http://{}:8080/v3/clusters/1c1/".format(self.IP())
+                            response = request_with_retries('GET', query_url)
+                            reg_command = response.json()['registrationToken']['hostCommand']
+                        else:
+                            query_url = "http://{}:8080/v2-beta/projects/{}/registrationtokens?state=active&limit=-1&sort=name".format(self.IP(), project_id)
+                            response = request_with_retries('GET', query_url)
+                            reg_command = response.json()['data'][0]['command']
+
                         log_debug("reg command: {}".format(reg_command))
 
                 except (IndexError, KeyError, RancherServerError) as e:
@@ -291,8 +300,11 @@ class RancherServer(object):
         #
         def __set_reg_url(self):
                 log_info("Setting the agent registration URL...")
-
-                reg_url = "http://{}:8080/v2-beta/settings/api.host".format(self.IP())
+                rancher_version = str(os.environ['RANCHER_VERSION']).rstrip()
+                if "v2" in rancher_version:
+                    reg_url = "http://{}:8080/v3/settings/api.host".format(self.IP())
+                else:
+                    reg_url = "http://{}:8080/v2-beta/settings/api.host".format(self.IP())
                 try:
                         request_data = {
                                 "type": "activeSetting",
@@ -336,8 +348,9 @@ class RancherServer(object):
                         with open(project_id_filename, 'w+') as f:
                                 f.write("{}".format(project_id))
                                 f.close()
-
-                        self.__set_reg_token(project_id)
+                        rancher_version = str(os.environ['RANCHER_VERSION']).rstrip()
+                        if "v2" not in rancher_version:
+                            self.__set_reg_token(project_id)
                         self.__set_reg_url()
 
                 except RancherServerError as e:

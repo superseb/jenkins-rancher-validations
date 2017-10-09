@@ -75,7 +75,11 @@ class RancherAgents(object):
 
         #
         def __wait_on_active_agents(self, count):
-                rancher_url = "http://{}:8080/v2-beta/schemas".format(RancherServer().IP())
+                rancher_version = str(os.environ['RANCHER_VERSION']).rstrip()
+                if "v2" in rancher_version:
+                    rancher_url = "http://{}:8080/v3/schemas".format(RancherServer().IP())
+                else:
+                    rancher_url = "http://{}:8080/v2-beta/schemas".format(RancherServer().IP())
                 os.environ['RANCHER_URL'] = rancher_url
                 rancher_orch = str(os.environ['RANCHER_ORCHESTRATION']).rstrip()
 
@@ -108,7 +112,11 @@ class RancherAgents(object):
 
         #
         def __wait_on_active_k8s(self):
-                rancher_url = "http://{}:8080/v2-beta/schemas".format(RancherServer().IP())
+                rancher_version = str(os.environ['RANCHER_VERSION']).rstrip()
+                if "v2" in rancher_version:
+                    rancher_url = "http://{}:8080/v3/schemas".format(RancherServer().IP())
+                else:
+                    rancher_url = "http://{}:8080/v2-beta/schemas".format(RancherServer().IP())
                 os.environ['RANCHER_URL'] = rancher_url
                 rancher_orch = str(os.environ['RANCHER_ORCHESTRATION']).rstrip()
 
