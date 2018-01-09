@@ -119,7 +119,7 @@ def validation_tests_cmd() {
     return "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/core/test_k8*"
 
   } else {
-    return "py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/"
+    return "ONTAG_RUNS='True' py.test -s --junit-xml=results.xml validation-tests/tests/v2_validation/cattlevalidationtest/"
   }
 }
 
