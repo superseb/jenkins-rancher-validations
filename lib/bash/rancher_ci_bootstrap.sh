@@ -167,7 +167,8 @@ docker_lvm_thinpool_config_native() {
 
     # Set up SeLinux
     if [ ${rhel_selinux} == "true" ]; then
-      docker_selinux
+      #docker_selinux
+      sudo setenforce 1
     else
       sudo setenforce 0
     fi
