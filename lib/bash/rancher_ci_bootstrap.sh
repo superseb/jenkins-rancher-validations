@@ -181,6 +181,25 @@ EOF
     sudo systemctl restart docker
 }
 
+###############################################################################
+# Docker Installation for Native Docker Latest
+###############################################################################
+docker_latest() {
+    local docker_version
+    docker_version="$(ec2_get_tag rancher.docker.version)" || exit $?
+    rhel_selinux="$(ec2_get_tag rancher.docker.rhel.selinux)" || exit $?
+    sudo yum-config-manager --enable rhui-REGION-rhel-server-extras
+    docker_version_match=$(sudo yum --showduplicates list docker-latest | grep ${docker_version} | sort -rn | head -n1 | awk -F' ' '{print $2}' | cut -d":" -f2)
+    sudo yum install -y docker-latest-$docker_version_match
+    sudo systemctl start docker-latest
+
+    # Set up SeLinux
+    if [ ${rhel_selinux} == "true" ]; then
+      sudo setenforce 1
+    else
+      sudo setenforce 0
+    fi
+}
 
 ###############################################################################
 # Docker SeLinux Configuration
@@ -336,6 +355,8 @@ main() {
       use_native_docker="$(ec2_get_tag rancher.docker.native)" || exit $?
       if [ ${use_native_docker} == "true" ]; then
         docker_lvm_thinpool_config_native
+      elif [ ${use_native_docker} == "latest" ]; then
+        docker_latest
       else
         docker_lvm_thinpool_config
       fi
