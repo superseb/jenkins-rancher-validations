@@ -330,7 +330,7 @@ ros_switch_docker(){
   current_version=`sudo ros engine list| grep current | cut -d " " -f 3 | cut -d"." -f 1,2`
 
   if [ "docker-${docker_version}" != "${current_version}" ]; then
-    req_version=`sudo ros engine list| grep docker-${docker_version} | cut -d " " -f 2`
+    req_version=`sudo ros engine list| grep docker-${docker_version} | cut -d " " -f 2| tail -1`
     echo "Switching docker to ${req_version} ..."
     sudo system-docker stop docker
     sudo ros engine switch ${req_version}
