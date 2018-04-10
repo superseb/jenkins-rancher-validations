@@ -232,15 +232,20 @@ def os_to_settings(os):
         ami = 'ami-d2c924b2'
         ssh_username = 'centos'
 
+    elif 'rhel-7.2' in os:
+        ami = 'ami-5dd3743d'
+        ssh_username = 'ec2-user'
+
+    elif 'rhel-7.3' in os:
+        ami = 'ami-6f68cf0f'
+        ssh_username = 'ec2-user'
+
     elif 'rhel-7.4' in os:
         ami = 'ami-9fa343e7'
         ssh_username = 'ec2-user'
 
-    elif 'rhel-7.2' in os:
-        ami = 'ami-5dd3743d'
-        ssh_username = 'ec2-user'
-    elif 'rhel-7.3' in os:
-        ami = 'ami-6f68cf0f'
+    elif 'rhel-7.5' in os:
+        ami = 'ami-28e07e50'
         ssh_username = 'ec2-user'
 
     elif 'rancheros-v1.1.3' in os:
