@@ -232,6 +232,10 @@ def os_to_settings(os):
         ami = 'ami-d2c924b2'
         ssh_username = 'centos'
 
+    elif 'rhel-7.5' in os:
+        ami = 'ami-206e0e58'
+        ssh_username = 'ec2-user'
+
     elif 'rhel-7.4' in os:
         ami = 'ami-9fa343e7'
         ssh_username = 'ec2-user'
@@ -245,6 +249,10 @@ def os_to_settings(os):
 
     elif 'rancheros-v1.1.3' in os:
         ami = 'ami-e316a39b'
+        ssh_username = 'rancher'
+
+    elif 'rancheros-v1.3.0' in os:
+        ami = 'ami-c60c94be'
         ssh_username = 'rancher'
 
     elif 'coreos-stable' in os:
