@@ -220,6 +220,45 @@ def err_and_exit(msg):
 # Given the OS, return a dictionary of OS-specific setting values
 # FIXME: Have this reference a config file for easy addtl platform support.
 def os_to_settings(os):
+    # Fix me. Currently we support amis for only 1 region which is ohio.
+    # We would need to have the ability to look up amis for a given region.
+    """
+    os_ami_dict = {'ubuntu-1604': {"ami": 'ami-a9d276c9',
+                                  "ssh_username": 'ubuntu'},
+                   'ubuntu-1404': {"ami": 'ami-01f05461',
+                                   "ssh_username": 'ubuntu'},
+                   'centos-7': {"ami": 'ami-d2c924b2',
+                                "ssh_username": 'centos'},
+                   'rhel-7.5': {"ami": 'ami-206e0e58',
+                                "ssh_username": 'ec2-user'},
+                   'rhel-7.4': {"ami": 'ami-9fa343e7',
+                                "ssh_username": 'ec2-user'},
+                   'rhel-7.2': {"ami": 'ami-5dd3743d',
+                                "ssh_username": 'ec2-user'},
+                   'rhel-7.3': {"ami": 'ami-6f68cf0f',
+                                "ssh_username": 'ec2-user'},
+                   'rancheros-v1.4.1': {"ami": 'ami-08ca2e89d91d17cfe',
+                                "ssh_username": 'rancher'},
+                   'rancheros-v1.4.2': {"ami": 'ami-03c3efd1e21bb4c6d',
+                                        "ssh_username": 'rancher'},
+                   'rancheros-v1.1.3': {"ami": 'ami-e316a39b',
+                                        "ssh_username": 'rancher'},
+                   'rancheros-v1.3.0': {"ami": 'ami-c60c94be',
+                                        "ssh_username": 'rancher'},
+                   'coreos-stable': {"ami": 'ami-06af7f66',
+                                        "ssh_username": 'core'}
+                   }
+    """
+    os_ami_dict = {'ubuntu-1604': {"ami": 'ami-0782e9ee97725263d',
+                                   "ssh_username": 'ubuntu'},
+                   'ubuntu-1404': {"ami": 'ami-019abc64',
+                                   "ssh_username": 'ubuntu'},
+                   'rhel-7.5': {"ami": 'ami-03291866',
+                                "ssh_username": 'ec2-user'},
+                   'rancheros-v1.4.2': {"ami": 'ami-02529740975197e75',
+                                        "ssh_username": 'rancher'},
+                   }
+    """
     if 'ubuntu-1604' in os:
         ami = 'ami-a9d276c9'
         ssh_username = 'ubuntu'
@@ -266,7 +305,10 @@ def os_to_settings(os):
     elif 'coreos-stable' in os:
         ami = 'ami-06af7f66'
         ssh_username = 'core'
-
+    """
+    if os in os_ami_dict.keys():
+        ami = os_ami_dict[os]["ami"]
+        ssh_username = os_ami_dict[os]["ssh_username"]
     else:
         raise RuntimeError("Unsupported OS specified '{}'!".format(os))
 
