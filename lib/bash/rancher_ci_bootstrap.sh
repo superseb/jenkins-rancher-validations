@@ -275,7 +275,9 @@ system_prep() {
 	    export DEBCONF_NONINTERACTIVE_SEEN=true
 	    sudo apt-get update
 	    sudo apt-get -y upgrade
-	    sudo apt-get install -y jq awscli htop mosh cloud-guest-utils
+	    sudo apt-get install -y python python-pip
+	    sudo pip install awscli
+	    sudo apt-get install -y jq htop mosh cloud-guest-utils
 	    ;;
 
 	default)
