@@ -51,7 +51,7 @@ def nuke_aws_keypair(name):
     log_debug("Removing AWS key pair '{}'...".format(name))
 
     try:
-        boto3.resource('ec2', region_name='us-west-2').KeyPair(name).delete()
+        boto3.resource('ec2', region_name='us-east-2').KeyPair(name).delete()
     except Boto3Error as e:
         log_debug(str(e.message))
         raise RuntimeError(e.message) from e
@@ -414,7 +414,7 @@ def aws_volid_from_tag(name):
 
 
 #
-def ebs_deprovision_volume(name, region='us-west-2', zone='a'):
+def ebs_deprovision_volume(name, region='us-east-2', zone='a'):
     log_info("Removing volume '{}' if  it exists...".format(name))
 
     try:
@@ -459,7 +459,7 @@ def tag_csv_to_array(tagcsv):
 
 
 #
-def ebs_provision_volume(name, region='us-west-2', zone='a', size=20, voltype='gp2', tags='is_ci,true'):
+def ebs_provision_volume(name, region='us-east-2', zone='a', size=20, voltype='gp2', tags='is_ci,true'):
     log_info("Creating EBS volume...")
 
     try:
@@ -799,7 +799,7 @@ def ec2_node_ensure(nodename, instance_type='m4.large'):
 
 
 #
-def ec2_node_public_ip(nodename, region='us-west-2'):
+def ec2_node_public_ip(nodename, region='us-east-2'):
 
     node_filter = [
         {'Name': 'tag:Name', 'Values': [nodename]},
@@ -826,7 +826,7 @@ def ec2_node_public_ip(nodename, region='us-west-2'):
 
 
 #
-def ec2_node_terminate(nodename, region='us-west-2'):
+def ec2_node_terminate(nodename, region='us-east-2'):
     log_info("Terminating instance '{}'..".format(nodename))
 
     node_filter = [
