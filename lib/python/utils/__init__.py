@@ -255,8 +255,12 @@ def os_to_settings(os):
                                    "ssh_username": 'ubuntu'},
                    'rhel-7.5': {"ami": 'ami-03291866',
                                 "ssh_username": 'ec2-user'},
+                   'rhel-7.6': {"ami": 'ami-0b500ef59d8335eee',
+                                "ssh_username": 'ec2-user'},
                    'rancheros-v1.4.2': {"ami": 'ami-02529740975197e75',
                                         "ssh_username": 'rancher'},
+                   'rancheros-v1.5.0': {"ami": 'ami-0be73aeb7d3076a36',
+                                        "ssh_username": 'rancher'}
                    }
     """
     if 'ubuntu-1604' in os:
