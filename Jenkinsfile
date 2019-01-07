@@ -148,7 +148,9 @@ def project_id_filename() {
 // Just want things like v1.2*
 def rancher_version = rancher_version()
 def String rancher_version_regex = "^v[\\d]\\.[\\d]\\.[\\d][\\-rc\\d]+\$"
-#def String rancher_version_regex = "^v[\\d]\\.[\\d]\\.[\\d][\\-patch\\d]?[\\-rc\\d]+\$"
+
+// To accomodate for patch releases
+// def String rancher_version_regex = "^v[\\d]\\.[\\d]\\.[\\d][\\-patch\\d]?[\\-rc\\d]+\$"
 
 if ( true == via_webhook() && (!(rancher_version ==~ rancher_version_regex)) ) {
   println("Received RANCHER_VERSION \'${rancher_version}\' via webhook which does not match regex \'${rancher_version_regex}\'.")
