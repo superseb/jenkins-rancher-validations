@@ -249,9 +249,11 @@ def os_to_settings(os):
                                         "ssh_username": 'core'}
                    }
     """
-    os_ami_dict = {'ubuntu-1604': {"ami": 'ami-0782e9ee97725263d',
+    os_ami_dict = {'ubuntu-1404': {"ami": 'ami-019abc64',
                                    "ssh_username": 'ubuntu'},
-                   'ubuntu-1404': {"ami": 'ami-019abc64',
+                   'ubuntu-1604': {"ami": 'ami-0c8b8e32659017cc5',
+                                   "ssh_username": 'ubuntu'},
+                   'ubuntu-1804': {"ami": 'ami-026f49896b1af2759',
                                    "ssh_username": 'ubuntu'},
                    'rhel-7.5': {"ami": 'ami-03291866',
                                 "ssh_username": 'ec2-user'},
@@ -260,6 +262,8 @@ def os_to_settings(os):
                    'rancheros-v1.4.2': {"ami": 'ami-02529740975197e75',
                                         "ssh_username": 'rancher'},
                    'rancheros-v1.5.0': {"ami": 'ami-0be73aeb7d3076a36',
+                                        "ssh_username": 'rancher'},
+                   'rancheros-v1.5.1': {"ami": 'ami-00769ca587d8e100c',
                                         "ssh_username": 'rancher'}
                    }
     """
